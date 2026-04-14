@@ -2038,7 +2038,7 @@ function check_Ammo(skip_animation)
                         local ammo_section = get_vanilla_ammo_section(weapon)
                         if ammo_section then
                             weapon:set_ammo_elapsed(currentAmmo - 1)
-                            alife_create_item(ammo_section, actor)
+                            alife_create_item(ammo_section, actor, { ammo = 1 })
                             print_dbg("Ejected round: %s (remaining: %d)", ammo_section, currentAmmo - 1)
                             ac_pending_message, ac_pending_clr, ac_pending_ammo_type, ac_pending_separate_tag = 
                                 get_ammo_status(weapon, weaponId, sec, in_grenade_mode, currentAmmo - 1)
@@ -2067,7 +2067,7 @@ function check_Ammo(skip_animation)
                         local ammo_section = get_vanilla_ammo_section(weapon)
                         if ammo_section then
                             weapon:set_ammo_elapsed(currentAmmo - 1)
-                            alife_create_item(ammo_section, actor)
+                            alife_create_item(ammo_section, actor, { ammo = 1 })
                             print_dbg("Ejected round: %s (remaining: %d)", ammo_section, currentAmmo - 1)
                             ac_pending_message, ac_pending_clr, ac_pending_ammo_type, ac_pending_separate_tag = 
                                 get_ammo_status(weapon, weaponId, sec, in_grenade_mode, currentAmmo - 1)
@@ -2106,7 +2106,7 @@ function check_Ammo(skip_animation)
                         local ammo_section = get_vanilla_ammo_section(weapon)
                         if ammo_section then
                             weapon:set_ammo_elapsed(currentAmmo - 1)
-                            alife_create_item(ammo_section, actor)
+                            alife_create_item(ammo_section, actor, { ammo = 1 })
                             print_dbg("Ejected shell: %s (remaining: %d)", ammo_section, currentAmmo - 1)
                             ac_pending_message, ac_pending_clr, ac_pending_ammo_type, ac_pending_separate_tag = 
                                 get_ammo_status(weapon, weaponId, sec, in_grenade_mode, currentAmmo - 1)
@@ -2135,7 +2135,7 @@ function check_Ammo(skip_animation)
                         local ammo_section = get_vanilla_ammo_section(weapon)
                         if ammo_section then
                             weapon:set_ammo_elapsed(currentAmmo - 1)
-                            alife_create_item(ammo_section, actor)
+                            alife_create_item(ammo_section, actor, { ammo = 1 })
                             print_dbg("Ejected shell: %s (remaining: %d)", ammo_section, currentAmmo - 1)
                             ac_pending_message, ac_pending_clr, ac_pending_ammo_type, ac_pending_separate_tag = 
                                 get_ammo_status(weapon, weaponId, sec, in_grenade_mode, currentAmmo - 1)

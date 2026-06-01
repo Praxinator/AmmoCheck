@@ -74,7 +74,7 @@ local use_clr = true
 local hide_counter = true
 local hide_ammo_icon = true
 local anim_mode = 2             -- 0: default (hide/show), 1: lower weapon, 2: fake reload
-local mcm_key = DIK_keys.DIK_T
+local mcm_key = DIK_keys.DIK_F
 local msg_duration = 2
 local show_ammo_type = false
 local show_ammo_tag = true
@@ -173,7 +173,8 @@ local clr03_Amber = base_colors.clr03_Amber
 local clr04_LemonGlacier = base_colors.clr04_LemonGlacier
 local clr05_LaserLemon = base_colors.clr05_LaserLemon
 local clr06_White = base_colors.clr06_White
-local clrEE_Purple = utils_xml.get_color("d_purple", true)
+local base_clrEE_Purple = utils_xml.get_color("d_purple", true)
+local clrEE_Purple = base_clrEE_Purple
 
 -- base ammo type colors
 local base_ammo_type_colors = {
@@ -259,6 +260,7 @@ local function update_colors()
     clr04_LemonGlacier = apply_intensity(base_colors.clr04_LemonGlacier, color_intensity)
     clr05_LaserLemon = apply_intensity(base_colors.clr05_LaserLemon, color_intensity)
     clr06_White = apply_intensity(base_colors.clr06_White, color_intensity)
+    clrEE_Purple = apply_intensity(base_clrEE_Purple, color_intensity)  -- overfull color honors intensity too
     -- rebuild messages table with new colors
     rebuild_messages()
     
@@ -1153,7 +1155,7 @@ local function get_ammo_status(weapon, weaponId, sec, in_grenade_mode, currentAm
         if currentAmmo == max_ammo + 1 then
             message, ammo_type, separate_tag = format_ammo_message("st_ac_plus1", currentAmmo, max_ammo, display_round, tag_round)
             msg_key = "st_ac_plus1"
-            clr = use_clr and clr06_White or clr06_White
+            clr = clr06_White  -- plus1 is always white regardless of use_clr
 
         elseif curAmmoPerc > 1 then
             message, ammo_type, separate_tag = format_ammo_message("st_ac_overfull", currentAmmo, max_ammo, display_round, tag_round)
@@ -1763,7 +1765,7 @@ function on_option_change()
         local clr_val = ui_mcm.get("rax_ammo_check/usecolor")
         -- MCM might return true/false, 1/0, or nil
         use_clr = (clr_val == true or clr_val == 1)
-        color_intensity = ui_mcm.get("rax_ammo_check/color_intensity") or 100
+        color_intensity = ui_mcm.get("rax_ammo_check/color_intensity") or 70
         update_colors() -- apply color intensity changes
         print_dbg("Settings loaded: use_clr=%s (raw=%s), color_intensity=%s", tostring(use_clr), tostring(clr_val), tostring(color_intensity))
         display_mode = ui_mcm.get("rax_ammo_check/display_mode") or 0
@@ -1815,7 +1817,7 @@ function on_option_change()
         fake_reload_pump_eject = (pump_eject_val == true or pump_eject_val == 1)  -- default false
         local ignore_val = ui_mcm.get("rax_ammo_check/fake_reload_ignore_list")
         fake_reload_ignore_list = (ignore_val == true or ignore_val == 1 or ignore_val == nil)  -- default true
-        busy_hands_delay = ui_mcm.get("rax_ammo_check/busy_hands_delay") or 1.5
+        busy_hands_delay = ui_mcm.get("rax_ammo_check/busy_hands_delay") or 1
         print_dbg("Animation settings: enable=%s, anim_mode=%s, no_mag_fb=%s, fake_fb=%s, bolt=%s, bolt_eject=%s, pump=%s, pump_eject=%s, ignore=%s", tostring(enable_animations), anim_mode, no_magazine_fallback, fake_reload_fallback, tostring(fake_reload_bolt_cycle), tostring(fake_reload_bolt_eject), tostring(fake_reload_pump_rack), tostring(fake_reload_pump_eject), tostring(fake_reload_ignore_list))
         
         -- debug settings
@@ -1826,8 +1828,12 @@ function on_option_change()
             mcm_key = ui_mcm.get("rax_ammo_check/keybind")
             mode = ui_mcm.get("rax_ammo_check/mode") or 0
             modifier = ui_mcm.get("rax_ammo_check/modifier") or 0
-            RegisterScriptCallback(modes[mode]["call"][1], this[modes[mode]["call"][1]])
+            -- on_option_change is the GLOBAL MCM callback (fires on every Apply, any mod),
+            -- so unregister BOTH handlers first to avoid stacking duplicate registrations
+            -- that would make a single key press fire check_Ammo multiple times.
+            UnregisterScriptCallback(modes[mode]["call"][1], this[modes[mode]["call"][1]])
             UnregisterScriptCallback(modes[mode]["call"][2], this[modes[mode]["call"][2]])
+            RegisterScriptCallback(modes[mode]["call"][1], this[modes[mode]["call"][1]])
         end
     end
 
@@ -2175,12 +2181,11 @@ function check_ammo_after_reload()
             loaded_msg = message
         else
             loaded_msg = game.translate_string("st_ac_loaded") .. " " .. message
-            if show_ammo_type and ammo_type then
-                if separate_tag then
-                    loaded_msg = loaded_msg .. " " .. ammo_type
-                else
-                    loaded_msg = ammo_type .. " " .. loaded_msg
-                end
+            -- In highlight modes 2/3 the ammo type/tag is carried in separate_tag instead of
+            -- being merged into message. Append the display string here so the "Loaded" line
+            -- still shows it. ammo_type is a classification KEY ("fmj"/"ap"), never display text.
+            if separate_tag and separate_tag ~= "" then
+                loaded_msg = loaded_msg .. " " .. separate_tag
             end
         end
         if custom_render then

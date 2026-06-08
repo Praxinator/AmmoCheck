@@ -1004,29 +1004,36 @@ local function get_ammo_type_color(ammo_type)
 end
 
 -- remove duplicate suffix if both ammo type and tag are shown from ammo name
--- e.g. "9x19 HP" + "(HP)" -> "9x19"
+-- e.g. "9x19 HP" + "(HP)" -> "9x19", ".300 Blackout MAI AP" + "(AP+)" -> ".300 Blackout MAI"
 local function remove_duplicate_suffix(ammo_name, tag)
     if not ammo_name or not tag then return ammo_name end
-    
-    -- extract tag content without parentheses (e.g., "HP" from "(HP)")
+
+    -- extract tag content without parentheses (e.g., "HP" from "(HP)", "AP+" from "(AP+)")
     local tag_content = string_match(tag, "%((.+)%)")
     if not tag_content then return ammo_name end
-    
-    local name_len = #ammo_name
-    local tag_len = #tag_content
-    
-    -- need at least space + tag length
-    if name_len < tag_len + 1 then return ammo_name end
-    
-    -- check if ends with " TAG" (case-insensitive)
-    local suffix_start = name_len - tag_len
-    local potential_suffix = string_sub(ammo_name, suffix_start + 1)
-    local char_before = string_sub(ammo_name, suffix_start, suffix_start)
-    
-    if char_before == " " and string_lower(potential_suffix) == string_lower(tag_content) then
-        return string_sub(ammo_name, 1, suffix_start - 1)
+
+    -- candidates to strip from the name end, longest first: the full tag ("AP+") and, for an enhanced
+    -- "+"-tag, the bare type without the plus ("AP") - so a name that ends in just the type letters
+    -- (".300 Blackout MAI AP") still drops the redundant suffix when the tag is "(AP+)".
+    local candidates = { tag_content }
+    local bare = string_match(tag_content, "^(.-)%+$")  -- "AP" from "AP+"
+    if bare and bare ~= "" then candidates[#candidates + 1] = bare end
+
+    for i = 1, #candidates do
+        local suf = candidates[i]
+        local name_len = #ammo_name
+        local suf_len = #suf
+        -- need at least space + suffix; ends with " SUF" (case-insensitive)
+        if name_len >= suf_len + 1 then
+            local suffix_start = name_len - suf_len
+            local potential_suffix = string_sub(ammo_name, suffix_start + 1)
+            local char_before = string_sub(ammo_name, suffix_start, suffix_start)
+            if char_before == " " and string_lower(potential_suffix) == string_lower(suf) then
+                return string_sub(ammo_name, 1, suffix_start - 1)
+            end
+        end
     end
-    
+
     return ammo_name
 end
 
@@ -1100,38 +1107,41 @@ local function classify_ammo_by_name(ammo_name)
     return "unknown", nil
 end
 
--- ArtiGrok Ballistics (optional) names its enhanced variants ".45 ACP 'Reaper' rounds (HP+)",
--- "12x70 'Dragon's Breath' shells (AP+)" etc: a descriptive name, an optional filler word
--- (rounds / shells), then a "(<TAG>+)" suffix where the trailing '+' marks the enhanced variant. The
--- short name (".45 HP+") drops the distinctive part and our section classifier tags it plainly "(HP)".
--- When a FULL name carries that "+"-suffixed parenthetical, parse it directly: the descriptive head
--- (minus a trailing filler word) becomes the display name, and the parenthetical itself is the tag. The
--- trailing '+' is the signature, so vanilla / other ammo is untouched and this is a no-op when the mod
--- is absent. Returns: display_name, tag, type_key  (nil when the name does not match).
+-- ArtiGrok Ballistics (optional) marks its enhanced ammo variants with a trailing "<TYPE>+" on the
+-- SHORT name (".45 HP+", ".300 AP+", ".300 FMJ+"), where the '+' is the signature. The FULL name is the
+-- descriptive one - either ".45 ACP 'Reaper' rounds (HP+)" (with a parenthetical) or ".300 Blackout MAI
+-- AP rounds" (no parenthetical). Build the display from the FULL name (drop a trailing "(TAG+)" if any,
+-- then a filler word like rounds / shells) and the tag from the short name's "<TYPE>+". Keying off the
+-- short name's trailing '+' covers both naming styles; vanilla / other ammo never ends in '+', so this
+-- is a no-op when the mod is absent. Returns: display_name, tag, type_key (nil when not an enhanced "+").
 local ENHANCED_TAG_TYPE = {
     hp = "hp", ap = "ap", fmj = "fmj", slug = "slug", buck = "buck",
     sub = "sub", t = "tracer", i = "fire",
 }
-local function parse_enhanced_ammo_name(full_name)
-    if not full_name or full_name == "" then return nil end
-    local head, inner = string_match(full_name, "^(.-)%s*%(([%a]+%+)%)%s*$")
-    if not head or not inner then return nil end
-    head = string.gsub(head, "%s+[Rr]ounds?$", "")  -- drop trailing "rounds"
-    head = string.gsub(head, "%s+[Ss]hells?$", "")   -- or "shells"
-    head = string.gsub(head, "%s+$", "")
-    if head == "" then return nil end
-    local base = string_lower(string.gsub(inner, "%+$", ""))  -- "HP+" becomes "hp"
-    return head, "(" .. inner .. ")", (ENHANCED_TAG_TYPE[base] or "enhanced")
+local function parse_enhanced_ammo(full_name, short_name)
+    if not short_name or short_name == "" then return nil end
+    local base = string_match(short_name, "(%a+)%+%s*$")  -- "AP" from ".300 AP+", "HP" from ".45 HP+"
+    if not base then return nil end
+    local tag = "(" .. base .. "+)"
+    local type_key = ENHANCED_TAG_TYPE[string_lower(base)] or "enhanced"
+    -- descriptive display name from the full name (fall back to the short name if missing)
+    local name = (full_name and full_name ~= "" and full_name) or short_name
+    name = string.gsub(name, "%s*%(%a+%+%)%s*$", "")  -- drop a trailing "(HP+)" if the full name has one
+    name = string.gsub(name, "%s+[Rr]ounds?$", "")     -- drop trailing "rounds"
+    name = string.gsub(name, "%s+[Ss]hells?$", "")     -- or "shells"
+    name = string.gsub(name, "%s+$", "")
+    if name == "" then name = short_name end
+    return name, tag, type_key
 end
 
--- classify a round, preferring the ArtiGrok enhanced full name, then the short name, then the section.
+-- classify a round, preferring the ArtiGrok enhanced naming, then the short name, then the section.
 -- returns: type_key, tag (e.g. "(AP)"), display_name
 local function classify_round(round_sec)
     if not round_sec then return nil, nil, nil end
-    local enh_name, enh_tag, enh_type = parse_enhanced_ammo_name(gc(ui_item.get_sec_name(round_sec)))
-    if enh_tag then return enh_type, enh_tag, enh_name end
     local name = gc(ui_item.get_sec_short_name(round_sec))
     if name == "" then name = nil end
+    local enh_name, enh_tag, enh_type = parse_enhanced_ammo(gc(ui_item.get_sec_name(round_sec)), name)
+    if enh_tag then return enh_type, enh_tag, enh_name end
     local atype, tag
     if name then atype, tag = classify_ammo_by_name(name) end
     if not tag then atype, tag = classify_ammo_type(round_sec) end

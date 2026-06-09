@@ -494,17 +494,79 @@ function show_fire_mode(old_fire_mode)
 end
 
 -- ### Actions
+--
+-- Here we change the fire mode directly instead of simulating the vanilla,
+-- because if we do it otherwise the vagina malfunction can happen (yeah).
+-- We do it through `SetFireMode`.
+-- The keypress path only works when those engine actions are bound to a key, and to
+-- a key other than ours: bind_to_dik returns 0 for an unbound action, so press_action(0) does nothing
+-- and the mode never changes (only the display updates).
+-- SetFireMode sidesteps the key bindings entirely.
+-- Note: SetFireMode itself is instant and never animates;
+-- thanks to Verdatim, we got a "workaround": apply_fire_mode below plays the selector
+-- switch animation separately (anm_switch_mode) for weapons whose HUD defines it
+
+-- Fire-mode list the engine actually uses for this weapon: the base section's list, unless an
+-- installed upgrade redefines fire_modes.
+-- Entries are raw strings, compare with tonumber
+-- This list is 1-based (Lua); SetFireMode wants a 0-based index into this same list.
+local function effective_fire_modes(weapon)
+    local modes = parse_list(ini_sys, weapon:section(), "fire_modes")
+    weapon:iterate_installed_upgrades(function(upgr_sec)
+        local prop_sec = ini_sys:r_string_ex(upgr_sec, "section")
+        if prop_sec then
+            local up = parse_list(ini_sys, prop_sec, "fire_modes")
+            if up and #up > 0 then modes = up end
+        end
+    end)
+    return modes
+end
+
+-- 0-based index of the current fire mode (the GetFireMode value) within the list. Falls back to the
+-- last slot, which is the engine's own default current index when nothing matches.
+local function current_mode_index(modes, cur_value)
+    for i = 1, #modes do
+        if tonumber(modes[i]) == cur_value then return i - 1 end
+    end
+    return #modes - 1
+end
+
+-- Fire-selector switch animation. SetFireMode is instant and never animates (engine just calls
+-- SetQueueSize), so to show the selector flick we play the HUD motion ourselves. anm_switch_mode is
+-- the alias the GAMMA animation packs define (e.g. hand_grot_firemode); vanilla guns do not have it.
+local FM_SWITCH_ANIM = "anm_switch_mode"
+
+-- index here is a 0-based slot in the weapon's fire_modes list. Negative is never passed: SetFireMode
+-- only wraps past the end, a negative index would index out of bounds, so prev-wrap is done by caller.
+local function apply_fire_mode(weapon, index)
+    local wm = weapon and weapon:cast_WeaponMagazined()
+    if not wm then return end
+    wm:SetFireMode(index)
+    -- Play the selector switch anim only when the weapon's HUD actually defines it; weapons without
+    -- it (vanilla) just keep the instant change with no animation and no error. play_hud_motion leaves
+    -- the weapon logically idle (state stays 0), so the on-screen mode text still displays normally.
+    if weapon.play_hud_motion and animation_common and animation_common.has_animation
+       and animation_common.has_animation(weapon:section(), FM_SWITCH_ANIM) then
+        weapon:play_hud_motion(FM_SWITCH_ANIM, true, 0, 1, 0)
+    end
+end
 
 function next_fire_mode(weapon, old_fire_mode)
-    level.press_action(bind_to_dik(key_bindings.kWPN_FIREMODE_NEXT))
-    level.release_action(bind_to_dik(key_bindings.kWPN_FIREMODE_NEXT))
-    CreateTimeEvent("ac_firemode", "show_delayed", 0, show_fire_mode, old_fire_mode)
+    local modes = effective_fire_modes(weapon)
+    if not (modes and #modes > 1) then return end
+    local idx = current_mode_index(modes, old_fire_mode)
+    apply_fire_mode(weapon, (idx + 1) % #modes)
+    -- show immediately (pass nil): the change is instant, so there is no fire-select animation to
+    -- wait on, and a duplicate value in the list could otherwise stall the old/new comparison.
+    CreateTimeEvent("ac_firemode", "show_delayed", 0, show_fire_mode, nil)
 end
 
 function prev_fire_mode(weapon, old_fire_mode)
-    level.press_action(bind_to_dik(key_bindings.kWPN_FIREMODE_PREV))
-    level.release_action(bind_to_dik(key_bindings.kWPN_FIREMODE_PREV))
-    CreateTimeEvent("ac_firemode", "show_delayed", 0, show_fire_mode, old_fire_mode)
+    local modes = effective_fire_modes(weapon)
+    if not (modes and #modes > 1) then return end
+    local idx = current_mode_index(modes, old_fire_mode)
+    apply_fire_mode(weapon, (idx - 1 + #modes) % #modes)
+    CreateTimeEvent("ac_firemode", "show_delayed", 0, show_fire_mode, nil)
 end
 
 -- Play a weapon-inspection animation (Tarkov inspired "look the gun over" anim) instead of showing the

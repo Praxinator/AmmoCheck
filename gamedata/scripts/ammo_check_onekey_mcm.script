@@ -75,6 +75,41 @@ local function set_mags_handler_suppressed(suppress)
     end
 end
 
+-- ### External reload GUARD
+--
+-- This is a fix made deliberately for Field Mag Loading mod.
+-- it registers its own `on_before_key_press` handler that, on the
+-- Reload bind, calls magazines.actor_on_weapon_reload directly.
+-- So our magazines.on_key_press unregister (above)
+-- does not touch that separate handler, so when One-Key owns the Reload key the foreign handler
+-- still fires a real reload right before our tap/hold action runs: the player sees a reload first adn then the
+-- ammo check. Their function reference is private to their script, so we cannot unregister it by name.
+--
+-- Solution: we wrap magazines.actor_on_weapon_reload
+-- and drop any call that lands inside a short block window we open on each
+-- One-Key-owned Reload-key press. Our on_before_key_press runs first in the dispatch (registered in
+-- on_game_start, before those mods register in actor_on_first_update), so the window is already open
+-- when the foreign handler runs in the same press. Our own reloads set okr_internal_reload and pass.
+local orig_actor_on_weapon_reload = nil
+local okr_reload_wrap_installed = false
+local okr_internal_reload = false           -- true only around try_reload_weapon's own reload call
+local okr_external_reload_block_until = 0    -- time_global() (ms) upper bound of the block window
+
+local function install_external_reload_guard()
+    if okr_reload_wrap_installed then return end
+    if not (magazines and magazines.actor_on_weapon_reload) then return end
+    orig_actor_on_weapon_reload = magazines.actor_on_weapon_reload
+    magazines.actor_on_weapon_reload = function(actor, wpn)
+        if enabled and not okr_internal_reload and time_global() < okr_external_reload_block_until then
+            if OKR_DEBUG then printf("[AC-OKR] external reload on Reload key suppressed (One-Key owns it)") end
+            return
+        end
+        return orig_actor_on_weapon_reload(actor, wpn)
+    end
+    okr_reload_wrap_installed = true
+    if OKR_DEBUG then printf("[AC-OKR] installed external reload guard") end
+end
+
 function on_game_start()
     RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
     RegisterScriptCallback("on_option_change", on_option_change)
@@ -110,6 +145,7 @@ function on_option_change()
     mcm_double_ms = ui_mcm.get("rax_ammo_check/onekey/doubletap_ms") or 200
 
     set_mags_handler_suppressed(enabled)
+    if enabled then install_external_reload_guard() end -- guard whatever other mod tries to fuck with the reload
 end
 
 -- ### Weapon helpers
@@ -229,6 +265,12 @@ function on_before_key_press(key, bind, dis, flags)
     end
 
     if not is_reload_key(key, bind) then return end -- check if proper key pressed
+
+    -- Open the block window NOW, before any foreign on_before_key_press handler (Field Mag Loading, etc)
+    -- runs later in this same dispatch. While it's open, magazines.actor_on_weapon_reload calls
+    -- we did not make are dropped, so no spurious reload fires ahead of our tap/hold action.
+    --Short window: only the foreign handler in this press must be covered; our own reload sets the bypass
+    okr_external_reload_block_until = time_global() + 150
 
     -- raise/lower the PDA when it is the active item (slot 8). The reload key is still bound, so let
     -- the engine handle it - it raises/lowers the PDA on the reload action. We just pass the key
@@ -362,11 +404,14 @@ function try_reload_weapon()
         return
     end
 
+    -- bypass the external-reload guard for this, our own, deliberate reload
+    okr_internal_reload = true
     if mags_supported(weapon) then
         magazines.actor_on_weapon_reload(db.actor, weapon)
     else
         db.actor:reload_weapon()
     end
+    okr_internal_reload = false
     -- Post-reload ammo check is handled globally by the main mod's "Auto-Check After Reload"
     -- (Behaviour) option, which fires on the reload animation end for any reload, including this one.
 end

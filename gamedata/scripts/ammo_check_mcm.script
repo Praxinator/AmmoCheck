@@ -127,12 +127,6 @@ local wpn_checking = nil        -- weapon being checked
 local det_active = nil          -- detector that was active before check
 local is_fake_reload = false    -- flag to prevent auto-check duplicate after fake reload
 
--- sprint fake-reload compat (see install_lower_weapon_sprint_compat)
-ac_sprint_keep_anim = false     -- true when the sprint mod exposes hooks we can wrap to keep the anim
-ac_sprint_check_active = false  -- true while a sprint-time check animation is in flight
-local ac_sprint_was_lowered = false
-local AC_SPRINT_RESTORE_MAX = 2.5  -- failsafe: force-restore the sprint pose after this many seconds
-
 -- animation timing constants
 local FAKE_RELOAD_MSG_DELAY = 1.5       -- delay before showing message after fake reload
 local BOLT_PUMP_MSG_OFFSET = 0.8        -- additional delay offset for bolt/pump animations
@@ -1907,9 +1901,6 @@ function actor_on_hud_animation_end(item, section, motion, state, slot)
         ac_end_reload_block()
     end
 
-    -- close any sprint-time check window once its animation ends, handing the pose back to the sprint mod
-    if ac_sprint_check_active then ac_end_sprint_check() end
-
     -- Path A inspect finished: clear the flag here, not only at the next check_Ammo. Left set,
     -- it would keep hide_msg_on_inspect suppressing unrelated later messages (e.g. every auto-check after reload).
     -- Only one weapon HUD anim plays at a time, so any weapon anim ending while the flag is set means the inspect is over.
@@ -2164,6 +2155,7 @@ function on_game_start()
     RegisterScriptCallback("actor_on_hud_animation_end", actor_on_hud_animation_end)
     RegisterScriptCallback("actor_on_weapon_jammed", actor_on_weapon_jammed)
     RegisterScriptCallback("actor_on_weapon_zoom_in", ac_on_ads_interrupt)
+    RegisterScriptCallback("actor_on_movement_changed", ac_on_movement_changed)
 
     -- register animation mutator for fake reload mode
     if animation_common and animation_common.add_anim_mutator then
@@ -2176,56 +2168,42 @@ end
 
 -- ### Lower Weapon Sprint compatibility
 --
--- The "Lower Weapon Sprint" mod lowers the weapon the instant the player starts sprinting. It decides
--- between "lower now" and "wait for the current animation, then lower" purely from weapon:get_state():
--- state 0 (idle) or 3 (aim) means lower immediately, any other (busy) state means keep polling until
--- the weapon returns to idle. A real reload or the engine's own anm_ammo_check sits in a busy state, so
--- it is left alone. Our fake reload plays through play_hud_motion, which keeps the weapon logically idle
--- (state 0), so that mod cuts it the moment sprint begins.
+-- The "Optimized" Lower Weapon Sprint variant (Spaicrab) COMPAT FIX.
+-- lowers the weapon from actor_on_hud_animation_end to delay_lower_weapon,
+-- which calls actor_lower_weapon(true) with NO weapon-state check
+-- While sprinting it thenb drops the weapon the instant any HUD motion ends,
+-- cutting our mag-check animation mid-play (fkn dumbass).
+-- The base Skieppy variant lowers only from a poll gated on get_state() == 0/1, so it never interrupts a
+-- non-idle check anim, that's why it works fine out-of-box for that one.
 --
--- Fix without touching that mod's files: it is loaded as the global table lower_weapon_sprint
-function ac_end_sprint_check()
-    if not ac_sprint_check_active then return end
-    ac_sprint_check_active = false
-    RemoveTimeEvent("ammo_check", "ac_sprint_restore")
-    -- if the player is still sprinting and the check left the weapon raised, drop it back so the sprint
-    -- pose resumes; the sprint mod takes over from here on its next movement event
-    if db.actor and ac_sprint_was_lowered and IsMoveState("mcSprint")
-       and not game.actor_weapon_lowered() then
-        game.actor_lower_weapon(true)
-    end
-    ac_sprint_was_lowered = false
-end
-
-function ac_sprint_restore_cb()
-    ac_end_sprint_check()
-    return true
-end
-
+-- Solution.sln: wrap its single lowering chokepoint and no-op it while our check
+-- animation is in flight
+-- The flag is read at call time (Spaicrab defers delay_lower_weapon ~0.05s after the
+-- anim-end event, and our actor_on_hud_animation_end clears the flag at that same end), so the final
+-- post-check lower still passes through; only the intermediate mid-anim lowers are suppressed
 function install_lower_weapon_sprint_compat()
-    if not (lower_weapon_sprint and lower_weapon_sprint.wait_for_animation_end) then return end
+    if not (lower_weapon_sprint and lower_weapon_sprint.delay_lower_weapon) then return end
 
-    local lws_orig_wait = lower_weapon_sprint.wait_for_animation_end
-    lower_weapon_sprint.wait_for_animation_end = function(wpn)
-        if (is_fake_reload or ac_sprint_check_active) and wpn then
-            ResetTimeEvent("wait_for_animation_end", wpn:id(), 0.05)  -- keep waiting, do not lower yet
-            return false
+    local lws_orig_lower = lower_weapon_sprint.delay_lower_weapon
+    lower_weapon_sprint.delay_lower_weapon = function(...)
+        if is_fake_reload or ac_pending_inspect_anim_playing then
+            return true  -- our check anim is playing; do not lower yet
         end
-        return lws_orig_wait(wpn)
+        return lws_orig_lower(...)
     end
+    print_dbg("Lower Weapon Sprint (Spaicrab) detected: suppressing mid-check lowering")
+end
 
-    -- Spaicrab variant: wrap the single lowering chokepoint so its post-animation re-lower (and any other
-    -- lowering path) is suppressed while our sprint-time check animation plays. Enables ac_sprint_keep_anim.
-    if lower_weapon_sprint.delay_lower_weapon then
-        local lws_orig_lower = lower_weapon_sprint.delay_lower_weapon
-        lower_weapon_sprint.delay_lower_weapon = function(...)
-            if ac_sprint_check_active then return true end  -- suppress lowering during our check
-            return lws_orig_lower(...)
-        end
-        ac_sprint_keep_anim = true
-        print_dbg("Lower Weapon Sprint (Spaicrab) detected: keeping check animation while sprinting")
-    else
-        print_dbg("Lower Weapon Sprint (Skieppy/unknown) detected: message-only while sprinting")
+-- Second half of the Spaicrab compat: when the player STOPS sprinting while our check anim is still
+-- playing, that mod's sprint-end branch runs game.actor_lower_weapon(false) then wpn:switch_state(0).
+-- The switch_state(0) cuts our animation and, because the natural HUD anim-end never fires, leaves
+-- is_fake_reload / ac_pending_inspect_anim_playing set, so the inspect DoF stays on until its failsafe.
+-- That branch only fires when game.actor_weapon_lowered() is true, so we pre-raise the weapon here.
+function ac_on_movement_changed(movementState)
+    if (is_fake_reload or ac_pending_inspect_anim_playing)
+       and not IsMoveState("mcSprint")
+       and db.actor and game.actor_weapon_lowered() then
+        game.actor_lower_weapon(false)  -- raise now so the sprint-end switch_state(0) is skipped
     end
 end
 
@@ -3363,20 +3341,6 @@ function check_Ammo(skip_animation)
                 print_dbg("Ammo check for %s - bolt-action override_inspect, ignoring inspect anim.", sec)
                 has_proper_inspect = false
             end
-        end
-    end
-
-    if not skip_animation and IsMoveState("mcSprint") then
-        if ac_sprint_keep_anim then
-            print_dbg("Ammo check for %s - sprinting, keeping animation (sprint-mod compat).", sec)
-            ac_sprint_check_active = true
-            ac_sprint_was_lowered = game.actor_weapon_lowered() or false
-            if ac_sprint_was_lowered then game.actor_lower_weapon(false) end  -- raise for the check
-            RemoveTimeEvent("ammo_check", "ac_sprint_restore")
-            CreateTimeEvent("ammo_check", "ac_sprint_restore", AC_SPRINT_RESTORE_MAX, ac_sprint_restore_cb)
-        else
-            print_dbg("Ammo check for %s - sprinting, showing message only (sprint-mod compat).", sec)
-            skip_animation = true
         end
     end
 

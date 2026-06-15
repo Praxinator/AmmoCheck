@@ -1003,7 +1003,37 @@
         <text>Show Progress Bar (with AmmoCheck Text)</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_maghud_show_bar_desc">
-        <text>When ON, also draw the Immersive Ammo Check mod's progress bar at the magazine alongside this mod's text. Only applies when "Use AmmoCheck Text and Colors" is ON (in the other mode the bar is already shown). Requires the Immersive Ammo Check mod installed.</text>
+        <text>When ON, draw a magazine fill bar under the floating readout, centered on the text. Only applies when "Use AmmoCheck Text and Colors" is ON (in the other mode the bar is already shown). Works with or without the Immersive Ammo Check mod.</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_gray">
+        <text>Progress Bar Always Gray</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_gray_desc">
+        <text>When ON, the fill bar is always gray. When OFF, it shifts color by remaining ammo: gray when full, orange around half, red near empty.</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_height">
+        <text>Progress Bar Height</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_height_desc">
+        <text>Thickness of the floating fill bar, in pixels.</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_alpha">
+        <text>Progress Bar Opacity</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_alpha_desc">
+        <text>Opacity of the floating fill bar, in percent. Lower = more transparent.</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_y_1line">
+        <text>Bar Y offset (1 line)</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_y_1line_desc">
+        <text>Vertical offset of the bar when the readout is a single line. Lower = bar higher.</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_y_2line">
+        <text>Bar Y offset (2 lines)</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_y_2line_desc">
+        <text>Vertical offset of the bar when the readout is two lines. Lower = bar higher.</text>
     </string>
 
     <!-- ### MCM section headers -->

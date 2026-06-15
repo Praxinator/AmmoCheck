@@ -75,7 +75,7 @@ local AC_COOLDOWN_MS = 3000
 -- Upper bound on how long reload stays blocked after a check commits. The weapon-state check
 -- releases the block as soon as the animation ends; this only caps a stuck state.
 local AC_ANIM_BLOCK_MS = 5000
-block_reload_during_check = true  -- MCM: prevent the reload key from interrupting the check animation  [non-local: upvalue budget]
+block_reload_during_check = false  -- MCM: prevent the reload key from interrupting the check animation  [non-local: upvalue budget]
 local ac_mags_suppressed = false  -- true while we have unregistered the Mags Redux reload handler for the block window
 local onekey_enabled = false      -- cached: One-Key owns/suppresses the Reload bind itself, so we must not also touch the Mags handler
 local onekey_captures_reload_bind = false  -- cached: One-Key only suppresses the Mags handler when it owns the vanilla Reload bind
@@ -110,6 +110,7 @@ enable_animations = true       -- master switch for all animations  [non-local: 
 check_grenade_mode = false  -- [non-local: upvalue budget]
 local display_mode = 0          -- 0: text, 1: numeric, 2: both
 local minimalist_bar = false    -- when true, replace text/numeric message with a 6-segment block bar (mirrors standalone "Minimalist Ammo Check" mod)
+local maghud_bar_gray = false   -- floating mag HUD bar: when true, always gray instead of the ammo-level color ramp
 local custom_render = true      -- when true, draw the message via a custom styled HUD overlay (font/size/position) instead of actor_menu.set_msg (Cheeki Numbers render technique)
 local render_font_family = 0    -- 0: Graffiti, 1: Letterica, 2: System, 3: Letterica Pure
 local render_font_size = 3      -- size index 1..5 into the font-family table (5 = large+)
@@ -634,6 +635,34 @@ local function ac_blacken_tags(s)
 end
 local AC_RENDER_W = 800                -- text wnd width in 1024x768 virtual UI space
 local AC_LINE_SPACING = 20             -- vertical gap between line 1 and line 2
+-- floating mag HUD progress bar (our own, cuz fuck it). MCM-driven.
+local AC_BAR_W = 70                    -- bar width in 1024x768 virtual UI space
+local AC_BAR_H = 10                    -- bar height (MCM slider)
+local AC_BAR_ALPHA = 191              -- bar fill alpha 0..255 (MCM transparency slider; ~75%)
+local AC_TEXTBOX_H = 50                -- height of each readout text control box
+-- bar top Y = text-box top (y) + these offsets. Two fixed cases since the readout is only ever 1 or
+-- 2 lines. Tune each independently (lower/more negative = bar higher). MCM sliders
+local AC_BAR_Y_1LINE = -10             -- bar offset when the readout is a single line
+local AC_BAR_Y_2LINE = 15             -- bar offset when the readout is two lines
+
+-- floating bar fill color by magazine fraction
+local function ac_bar_fill_color(p)
+    if maghud_bar_gray then return GetARGB(AC_BAR_ALPHA, 185, 185, 185) end
+    if p < 0 then p = 0 elseif p > 1 then p = 1 end
+    local r, g, b
+    if p >= 0.5 then
+        local t = (p - 0.5) * 2            -- 0 at half, 1 at full
+        r = 235 + (185 - 235) * t
+        g = 140 + (185 - 140) * t
+        b = 45  + (185 - 45)  * t
+    else
+        local t = p * 2                    -- 0 at empty, 1 at half
+        r = 210 + (235 - 210) * t
+        g = 45  + (140 - 45)  * t
+        b = 35  + (45  - 35)  * t
+    end
+    return GetARGB(AC_BAR_ALPHA, math_floor(r), math_floor(g), math_floor(b))
+end
 
 class "ac_msg_overlay" (CUIScriptWnd)
 
@@ -650,6 +679,49 @@ function ac_msg_overlay:__init() super()
     -- center/right alignment width quirk with mid-string %c tags can't open a gap.
     self.l1main = self:make_line()
     self.l1tag  = self:make_line()
+    -- optional magazine fill bar for the floating HUD, drawn from two plain statics (its own xml so
+    -- it works without IAC). CUIStatic:SetWndSize actually scales the image, so bar height is real
+    self.bar_bg = nil
+    self.bar_fill = nil
+    self.bar_shown = false
+    pcall(function()
+        local bx = CScriptXmlInit()
+        bx:ParseFile("ammo_check_maghud.xml")
+        self.bar_bg = bx:InitStatic("ac_bar_bg", self)
+        self.bar_fill = bx:InitStatic("ac_bar_fill", self)
+    end)
+    if self.bar_bg then self.bar_bg:Show(false) end
+    if self.bar_fill then self.bar_fill:Show(false) end
+end
+
+-- place the fill bar centered on center_x, top edge at top_y, fill = progress (0..1)
+function ac_msg_overlay:place_bar(center_x, top_y, progress)
+    if not (self.bar_bg and self.bar_fill) then return end
+    progress = progress or 0
+    if progress < 0 then progress = 0 elseif progress > 1 then progress = 1 end
+    local left = center_x - AC_BAR_W / 2
+
+    -- gray track: a touch more transparent than the fill so it reads as the empty background
+    _shared_vec_render:set(left, top_y)          ; self.bar_bg:SetWndPos(_shared_vec_render)
+    _shared_vec_render:set(AC_BAR_W, AC_BAR_H)   ; self.bar_bg:SetWndSize(_shared_vec_render)
+    self.bar_bg:SetTextureColor(GetARGB(math_floor(AC_BAR_ALPHA * 0.55), 175, 175, 175))
+    self.bar_bg:Show(true)
+
+    -- colored fill, width scaled by the magazine fraction
+    local fw = AC_BAR_W * progress
+    _shared_vec_render:set(left, top_y)          ; self.bar_fill:SetWndPos(_shared_vec_render)
+    _shared_vec_render:set(fw, AC_BAR_H)         ; self.bar_fill:SetWndSize(_shared_vec_render)
+    self.bar_fill:SetTextureColor(ac_bar_fill_color(progress))
+    self.bar_fill:Show(fw > 0.5)
+    self.bar_shown = true
+end
+
+function ac_msg_overlay:hide_bar()
+    if self.bar_shown then
+        if self.bar_bg then self.bar_bg:Show(false) end
+        if self.bar_fill then self.bar_fill:Show(false) end
+        self.bar_shown = false
+    end
 end
 
 -- build one text control (clones a vanilla HUD label node, inherits a usable skin).
@@ -657,13 +729,13 @@ end
 function ac_msg_overlay:make_line()
     local s = self.xml:InitTextWnd("companion_list:slot:distance", self)
     s:SetFont(self.font_func())
-    _shared_vec_render:set(AC_RENDER_W, 50) ; s:SetWndSize(_shared_vec_render)
+    _shared_vec_render:set(AC_RENDER_W, AC_TEXTBOX_H) ; s:SetWndSize(_shared_vec_render)
     s:SetTextComplexMode(true)
     _shared_vec_render:set(-1000, -1000) ; s:SetWndPos(_shared_vec_render)
 
     local w = self.xml:InitTextWnd("companion_list:slot:distance", self)
     w:SetFont(self.font_func())
-    _shared_vec_render:set(AC_RENDER_W, 50) ; w:SetWndSize(_shared_vec_render)
+    _shared_vec_render:set(AC_RENDER_W, AC_TEXTBOX_H) ; w:SetWndSize(_shared_vec_render)
     w:SetTextComplexMode(true)
     _shared_vec_render:set(-1000, -1000) ; w:SetWndPos(_shared_vec_render)
 
@@ -784,6 +856,7 @@ function ac_msg_overlay:show_combined(main_str, main_clr, tag_str, tag_clr, dura
     self:hide_line(self.l1)
     self:hide_line(self.l2)
     self:hide_segs()
+    self:hide_bar()
 
     self.visible_until = time_global() + math_floor((duration or 2) * 1000)
     if not self.added then
@@ -851,6 +924,7 @@ function ac_msg_overlay:show_segments(segments, duration, pos)
     self:hide_line(self.l2)
     self:hide_line(self.l1main)
     self:hide_line(self.l1tag)
+    self:hide_bar()
 
     self.visible_until = time_global() + math_floor((duration or 2) * 1000)
     if not self.added then
@@ -882,6 +956,7 @@ function ac_msg_overlay:show(message, clr, line2, line2_clr, duration, pos)
     self:hide_line(self.l1main)
     self:hide_line(self.l1tag)
     self:hide_segs()
+    self:hide_bar()
 
     self.visible_until = time_global() + math_floor((duration or 2) * 1000)
 
@@ -910,6 +985,7 @@ function ac_msg_overlay:hide()
     self:hide_line(self.l1main)
     self:hide_line(self.l1tag)
     self:hide_segs()
+    self:hide_bar()
     self.visible_until = 0
     if self.added then
         local hud = get_hud()
@@ -1725,7 +1801,7 @@ local function display_ammo_status(message, clr, ammo_type, separate_tag, segmen
     -- corner message, and a mag-visible check animation is in flight, skip the screen message so the
     -- two do not stack
     if ammo_check_maghud_mcm and ammo_check_maghud_mcm.suppresses_message
-       and ammo_check_maghud_mcm.suppresses_message() and is_check_animating() then
+       and ammo_check_maghud_mcm.suppresses_message() then
         return
     end
     -- hide_msg_on_inspect: suppress message only when path A is letting the native inspect anim play.
@@ -1781,13 +1857,31 @@ function is_check_animating()
     return (ac_pending_inspect_anim_playing or is_fake_reload or do_ammo_check_anim) and true or false
 end
 
-function render_maghud_overlay(weapon, x, y)
+-- magazine fill fraction (0..1) for the floating HUD bar
+local function maghud_bar_progress(weapon)
+    local wcast = weapon.cast_Weapon and weapon:cast_Weapon()
+    if not wcast then return 0 end
+    local cur = wcast:GetAmmoElapsed() or 0
+    local mx = wcast:GetAmmoMagSize() or 0
+    if get_mag_loaded and is_supported_weapon and is_supported_weapon(weapon) then
+        local md = get_mag_loaded(weapon:id())
+        if md and md.section then
+            local ms = SYS_GetParam(2, md.section, "max_mag_size")
+            if ms and ms > 0 then mx = ms end
+        end
+    end
+    if not mx or mx <= 0 then return 0 end
+    local p = cur / mx
+    if p < 0 then return 0 elseif p > 1 then return 1 end
+    return p
+end
+
+function render_maghud_overlay(weapon, x, y, with_bar)
     if not (weapon and IsWeapon(weapon)) then return end
     local weaponId = weapon:id()
     local sec = weapon:section()
     local in_grenade_mode = weapon:weapon_in_grenade_mode()
     local currentAmmo = weapon:get_ammo_in_magazine() or 0
-
     local message, clr, ammo_type, separate_tag, segments =
         get_ammo_status(weapon, weaponId, sec, in_grenade_mode, currentAmmo)
     if not message then return end
@@ -1796,18 +1890,27 @@ function render_maghud_overlay(weapon, x, y)
     local pos = { x = x, y = y }
     local dur = msg_duration or 2
 
+    local lines = 1
     if segments then
         ov:show_segments(segments, dur, pos)
-        return
+    else
+        local tag_clr = (use_clr and color_ammo_type and get_ammo_type_color(ammo_type)) or clr06_White
+        local base_clr = clr or clr06_White
+        if highlight_ammo_mode == 3 and separate_tag and separate_tag ~= "" then
+            ov:show_combined(message, base_clr, separate_tag, tag_clr, dur, pos)
+        else
+            local line2 = (highlight_ammo_mode == 2) and separate_tag or nil
+            ov:show(message, base_clr, line2, tag_clr, dur, pos)
+            if line2 and line2 ~= "" then lines = 2 end
+        end
     end
 
-    local tag_clr = (use_clr and color_ammo_type and get_ammo_type_color(ammo_type)) or clr06_White
-    local base_clr = clr or clr06_White
-    if highlight_ammo_mode == 3 and separate_tag and separate_tag ~= "" then
-        ov:show_combined(message, base_clr, separate_tag, tag_clr, dur, pos)
+    if with_bar then
+        -- one fixed offset per line count (the readout is only ever 1 or 2 lines)
+        local off = (lines == 2) and AC_BAR_Y_2LINE or AC_BAR_Y_1LINE
+        ov:place_bar(x, y + off, maghud_bar_progress(weapon))
     else
-        local line2 = (highlight_ammo_mode == 2) and separate_tag or nil
-        ov:show(message, base_clr, line2, tag_clr, dur, pos)
+        ov:hide_bar()
     end
 end
 
@@ -2100,10 +2203,10 @@ function ac_clear_anim_cam_effectors()
     end
 end
 
--- ADS interrupt
-function ac_on_ads_interrupt()
+-- shared interrupt cleanup for ADS / weapon fire while a check is mid-play
+local function ac_cancel_active_check(reason)
     if not (is_fake_reload or do_ammo_check_anim or ac_pending_inspect_anim_playing) then return end
-    print_dbg("Ammo check interrupted by ADS - cancelling pending message/events.")
+    print_dbg("Ammo check interrupted by %s - cancelling pending message/events.", reason)
     if game.stop_hud_motion then game.stop_hud_motion() end
     ac_clear_anim_cam_effectors()
     RemoveTimeEvent("ammo_check", "message_delay")
@@ -2125,6 +2228,38 @@ function ac_on_ads_interrupt()
     ac_cooldown_until = 0
     ac_last_weapon_id = 0
     ac_end_reload_block()
+    if ac_overlay then ac_overlay:hide() end
+    ac_message_until = 0
+end
+
+-- ADS interrupt
+function ac_on_ads_interrupt()
+    ac_cancel_active_check("ADS")
+end
+
+-- weapon fired interrupt: the shot is allowed mid-overlay (logical idle), so cut the anim
+function ac_on_weapon_fired()
+    ac_cancel_active_check("fire")
+end
+
+-- real (engine) reload while a check anim plays: drop the now-stale corner readout
+function ac_on_weapon_reload()
+    ac_cancel_active_check("reload")
+end
+
+-- verdatim
+function check_for_no_inspect(anim_table, obj)
+    if not string_find(anim_table.anm_name, "ammo_check") then
+        -- a non-inspect HUD anim started while an inspect was mid-play (e.g. shoot interrupt):
+        -- drop the lingering inspect cam effector and the pending corner message
+        if ac_pending_inspect_anim_playing then
+            ac_clear_anim_cam_effectors()
+            RemoveTimeEvent("ammo_check", "message_delay")
+            if ac_overlay then ac_overlay:hide() end
+            ac_message_until = 0
+        end
+        ac_pending_inspect_anim_playing = false
+    end
 end
 
 function on_game_start()
@@ -2155,12 +2290,16 @@ function on_game_start()
     RegisterScriptCallback("actor_on_hud_animation_end", actor_on_hud_animation_end)
     RegisterScriptCallback("actor_on_weapon_jammed", actor_on_weapon_jammed)
     RegisterScriptCallback("actor_on_weapon_zoom_in", ac_on_ads_interrupt)
+    RegisterScriptCallback("actor_on_weapon_fired", ac_on_weapon_fired)
+    RegisterScriptCallback("actor_on_weapon_reload", ac_on_weapon_reload)
     RegisterScriptCallback("actor_on_movement_changed", ac_on_movement_changed)
 
     -- register animation mutator for fake reload mode
     if animation_common and animation_common.add_anim_mutator then
         animation_common.add_anim_mutator(mag_check_animation, 2)
         print_dbg("Animation mutator registered: mag_check_animation (priority 2)")
+        -- verdatim
+        animation_common.add_anim_mutator(check_for_no_inspect, 10)
     end
 
     install_lower_weapon_sprint_compat()
@@ -2416,6 +2555,11 @@ function on_mcm_load()
                 { id = "enable", type = "check", val = 1, def = false },
                 { id = "use_our_text", type = "check", val = 1, def = false },
                 { id = "show_bar", type = "check", val = 1, def = false },
+                { id = "bar_gray", type = "check", val = 1, def = false },
+                { id = "bar_height", type = "track", val = 2, min = 2, max = 24, step = 1, def = 10 },
+                { id = "bar_alpha", type = "track", val = 2, min = 10, max = 100, step = 5, def = 75 },
+                { id = "bar_y_1line", type = "track", val = 2, min = -40, max = 40, step = 1, def = -10 },
+                { id = "bar_y_2line", type = "track", val = 2, min = -40, max = 40, step = 1, def = 15 },
             }},
 
             -- ### Animation
@@ -2453,7 +2597,7 @@ function on_mcm_load()
 
                 { id = "hdr_timing", type = "title", text = "ui_mcm_rax_ammo_check_hdr_timing", align = "l", clr = MCM_HDR_CLR },
                 { id = "busy_hands_delay", type = "track", val = 2, min = 0.5, max = 3, step = 0.25, def = 1 },
-                { id = "block_reload_during_check", type = "check", val = 1, def = true },
+                { id = "block_reload_during_check", type = "check", val = 1, def = false },
             }},
 
             -- ### Keybind
@@ -2629,6 +2773,13 @@ function on_option_change()
         display_mode = ui_mcm.get("rax_ammo_check/display/display_mode") or 0
         local min_bar_val = ui_mcm.get("rax_ammo_check/display/minimalist_bar")
         minimalist_bar = (min_bar_val == true or min_bar_val == 1)  -- default false
+        local bar_gray_val = ui_mcm.get("rax_ammo_check/maghud/bar_gray")
+        maghud_bar_gray = (bar_gray_val == true or bar_gray_val == 1)  -- default false (color ramp)
+        AC_BAR_H = ui_mcm.get("rax_ammo_check/maghud/bar_height") or AC_BAR_H
+        local bar_alpha_pct = ui_mcm.get("rax_ammo_check/maghud/bar_alpha") or 75
+        AC_BAR_ALPHA = math_floor(bar_alpha_pct * 2.55)
+        AC_BAR_Y_1LINE = ui_mcm.get("rax_ammo_check/maghud/bar_y_1line") or AC_BAR_Y_1LINE
+        AC_BAR_Y_2LINE = ui_mcm.get("rax_ammo_check/maghud/bar_y_2line") or AC_BAR_Y_2LINE
         local custom_render_val = ui_mcm.get("rax_ammo_check/display/custom_render")
         custom_render = (custom_render_val == true or custom_render_val == 1 or custom_render_val == nil)  -- default true
         render_font_family = ui_mcm.get("rax_ammo_check/display/render_font_family") or 0
@@ -2685,7 +2836,7 @@ function on_option_change()
         fake_reload_ignore_list = (ignore_val == true or ignore_val == 1 or ignore_val == nil)  -- default true
         busy_hands_delay = ui_mcm.get("rax_ammo_check/animation/busy_hands_delay") or 1
         local block_reload_val = ui_mcm.get("rax_ammo_check/animation/block_reload_during_check")
-        block_reload_during_check = (block_reload_val == true or block_reload_val == 1 or block_reload_val == nil)  -- default true
+        block_reload_during_check = (block_reload_val == true or block_reload_val == 1)  -- default false
         local onekey_en = ui_mcm.get("rax_ammo_check/onekey/enable")
         onekey_enabled = (onekey_en == true or onekey_en == 1)
         -- One-Key's reload-multiplex key; used to yield the standalone check only on a real collision
@@ -3043,6 +3194,12 @@ function check_Ammo_silent()
 
     -- get ammo status using shared function
     local message, clr, ammo_type, separate_tag, segments = get_ammo_status(weapon, weaponId, sec, in_grenade_mode, currentAmmo)
+
+    -- Auto-check plays no check animation, so the floating HUD's update loop would not engage on
+    -- its own
+    if ammo_check_maghud_mcm and ammo_check_maghud_mcm.take_autocheck then
+        ammo_check_maghud_mcm.take_autocheck(math_floor(msg_duration * 1000))
+    end
 
     -- display directly
     display_ammo_status(message, clr, ammo_type, separate_tag, segments)

@@ -1,0 +1,11 @@
+<w>
+	<!-- bar drawn from two plain statics (bg track + fill) so height/width/color/alpha are fully
+	     script-driven; geometry here is just a seed, overridden every frame via SetWndSize.
+	     stretch="1" makes the white texture scale to the window rect (real height control) -->
+	<ac_bar_bg x="0" y="0" width="70" height="8" stretch="1">
+		<texture>white_empty_box</texture>
+	</ac_bar_bg>
+	<ac_bar_fill x="0" y="0" width="70" height="8" stretch="1">
+		<texture>white_filled_box</texture>
+	</ac_bar_fill>
+</w>

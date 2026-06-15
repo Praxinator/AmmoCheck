@@ -13,6 +13,18 @@ local bone_debug = false
 local debug_mode = false
 local lib = nil
 
+-- real-reload-during-check tracking
+local reload_active = false
+local reload_end_at = 0        -- failsafe upper bound for the reload window
+local reload_wid = nil         -- id of the weapon being reloaded
+
+-- auto-check-after-reload float window
+local autocheck_until = 0
+
+local function autocheck_active()
+    return time_global() < autocheck_until
+end
+
 local DUMP_BONES_KEY = DIK_keys.DIK_SLASH
 
 local shown_his = false
@@ -41,12 +53,21 @@ local BULLET_BONE_NAMES = {
     "bullet001", "patron_in_weapon_001"  -- RSh-12 and other EFT-rig revolvers (first chambered round)
 }
 
--- the corner message is suppressed whenever the floating HUD will actually show: in ON mode our
--- overlay always renders; in OFF mode only when the other mod (the renderer) is present
 function suppresses_message()
     if not enabled then return false end
+    local check_anim = ammo_check_mcm and ammo_check_mcm.is_check_animating
+        and ammo_check_mcm.is_check_animating()
+    if not (check_anim or reload_active or autocheck_active()) then return false end
     if use_our_text then return true end
     return lib ~= nil
+end
+
+-- Hand the auto-check-after-reload readout to the float HUD
+function take_autocheck(duration_ms)
+    if not enabled then return false end
+    if not (use_our_text or lib ~= nil) then return false end
+    autocheck_until = time_global() + (duration_ms or 2000)
+    return true
 end
 
 local function lib_ready()
@@ -116,6 +137,25 @@ local function project_mag_bone(wpn, sec, current_ammo)
     return s
 end
 
+-- full reload animation length in ms (0 if unknown)
+local function reload_anim_len_ms(wpn, empty)
+    local sec = wpn:section()
+    local hud = ini_sys:r_string_ex(sec, "hud") or sec
+    local motion = empty and "anm_reload_empty" or "anm_reload"
+    local len = game.get_motion_length(hud, motion, 1)
+    if (not len or len == 0) and empty then
+        len = game.get_motion_length(hud, "anm_reload", 1)  -- guns with no distinct empty anim
+    end
+    return len or 0
+end
+
+local function clear_reload_state()
+    reload_active = false
+    reload_end_at = 0
+    reload_wid = nil
+    autocheck_until = 0
+end
+
 local function hide_his()
     if shown_his and lib_ready() then lib.close_hud() end
     shown_his = false
@@ -134,13 +174,8 @@ local function hide_all()
 end
 
 local function drive_ours(wpn)
-    -- optional: render his progress bar too (his renderer with the text blanked via bar_only)
-    if show_bar and lib_ready() then
-        lib.bar_only = true
-        if not shown_his then lib.show_hud() ; shown_his = true end
-    else
-        hide_his()
-    end
+    -- our own bar is drawn by the overlay (centered under the text); never use his renderer here
+    hide_his()
     if not (ammo_check_mcm and ammo_check_mcm.render_maghud_overlay) then return end
     local current_ammo = wpn:get_ammo_in_magazine() or 0
     local s = project_mag_bone(wpn, wpn:section(), current_ammo)
@@ -150,7 +185,7 @@ local function drive_ours(wpn)
     else
         x, y = SCREEN_W / 2, 600
     end
-    ammo_check_mcm.render_maghud_overlay(wpn, x, y)
+    ammo_check_mcm.render_maghud_overlay(wpn, x, y, show_bar)
     shown_ours = true
 end
 
@@ -164,11 +199,27 @@ end
 function actor_on_update()
     if not enabled then
         if shown_his or shown_ours then hide_all() end
+        clear_reload_state()
         return
     end
+    -- a real reload owns the display until its anim ends
+    if reload_active then
+        local wpn = db.actor and db.actor:active_item()
+        local now = time_global()
+        if now >= reload_end_at or not (wpn and IsWeapon(wpn)) then
+            if shown_his or shown_ours then hide_all() end
+            clear_reload_state()
+            return
+        end
+        -- the readout is stale now: drop it for the rest of the reload
+        if shown_his or shown_ours then hide_all() end
+        return
+    end
+
     local animating = ammo_check_mcm and ammo_check_mcm.is_check_animating
         and ammo_check_mcm.is_check_animating()
-    if not animating then
+    -- auto-check rides the timed window instead of an animation
+    if not (animating or autocheck_active()) then
         if shown_his or shown_ours then hide_all() end
         return
     end
@@ -177,6 +228,7 @@ function actor_on_update()
         if shown_his or shown_ours then hide_all() end
         return
     end
+
     if use_our_text then
         drive_ours(wpn)
     else
@@ -184,8 +236,38 @@ function actor_on_update()
     end
 end
 
+-- engine reload (not our play_hud_motion fake)
+function actor_on_weapon_reload(wpn, ammo_total)
+    if not enabled then return end
+    if not (wpn and IsWeapon(wpn)) then return end
+    if not (shown_his or shown_ours) then return end
+
+    local now = time_global()
+    local empty = (wpn:get_ammo_in_magazine() or 0) == 0
+    local full = reload_anim_len_ms(wpn, empty)
+    if full == 0 then full = 4000 end
+
+    reload_active = true
+    reload_wid = wpn:id()
+    reload_end_at = now + full + 500       -- hard cap so the HUD never sticks if the end is missed
+    autocheck_until = 0                    -- a fresh reload supersedes any lingering auto-check window
+end
+
+-- the real reload's anim ending is the authoritative close signal (covers plain reloads, where
+-- is_check_animating is never set)
+function actor_on_hud_animation_end(item, section, motion, state, slot)
+    if not reload_active then return end
+    if not (motion and item and IsWeapon(item)) then return end
+    if reload_wid and item:id() ~= reload_wid then return end
+    if not string_find(motion, "^anm_[Rr]eload") then return end
+
+    if shown_his or shown_ours then hide_all() end
+    clear_reload_state()
+end
+
 function actor_on_net_destroy()
     hide_all()
+    clear_reload_state()
 end
 
 -- debug helper: log every bone name of the weapon in hand, so a magazine/round bone can be
@@ -236,7 +318,7 @@ function on_option_change()
     bone_debug = (bd == true or bd == 1)
     local dm = ui_mcm.get("rax_ammo_check/debug/debug_mode")
     debug_mode = (dm == true or dm == 1)
-    if not enabled then hide_all() end
+    if not enabled then hide_all() ; clear_reload_state() end
 end
 
 function actor_on_first_update()
@@ -249,6 +331,8 @@ function on_game_start()
     RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
     RegisterScriptCallback("on_option_change", on_option_change)
     RegisterScriptCallback("actor_on_update", actor_on_update)
+    RegisterScriptCallback("actor_on_weapon_reload", actor_on_weapon_reload)
+    RegisterScriptCallback("actor_on_hud_animation_end", actor_on_hud_animation_end)
     RegisterScriptCallback("actor_on_net_destroy", actor_on_net_destroy)
     RegisterScriptCallback("on_key_press", on_key_press)
 end

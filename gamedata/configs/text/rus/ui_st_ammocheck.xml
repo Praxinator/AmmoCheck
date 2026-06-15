@@ -983,7 +983,37 @@
         <text>Показывать полосу заполнения (с текстом AmmoCheck)</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_maghud_show_bar_desc">
-        <text>Когда ВКЛ, у магазина также рисуется полоса заполнения мода Immersive Ammo Check рядом с текстом этого мода. Применяется только когда включено "Использовать текст и цвета AmmoCheck" (в другом режиме полоса уже показывается). Требует установленного мода Immersive Ammo Check.</text>
+		<text>Когда ВКЛ, под плавающим итогом рисуется полоса заполнения магазина, отцентрованная по тексту. Применяется только когда "Использовать текст и цвета AmmoCheck" ВКЛ (в другом режиме полоса уже показывается). Работает с модом Immersive Ammo Check и без него.</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_gray">
+        <text>Полоса прогресса всегда серая</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_gray_desc">
+        <text>Когда ВКЛ, полоса заполнения всегда серая. Когда ВЫКЛ, цвет меняется по остатку патронов: серая при полном магазине, оранжевая около половины, красная ближе к пустому.</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_height">
+        <text>Высота полосы прогресса</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_height_desc">
+        <text>Толщина плавающей полосы заполнения, в пикселях.</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_alpha">
+        <text>Непрозрачность полосы прогресса</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_alpha_desc">
+        <text>Непрозрачность плавающей полосы заполнения, в процентах. Меньше = прозрачнее.</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_y_1line">
+        <text>Смещение полосы по Y (1 строка)</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_y_1line_desc">
+        <text>Вертикальное смещение полосы, когда текст в одну строку. Меньше = полоса выше.</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_y_2line">
+        <text>Смещение полосы по Y (2 строки)</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_maghud_bar_y_2line_desc">
+        <text>Вертикальное смещение полосы, когда текст в две строки. Меньше = полоса выше.</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_maghud_req_note">
         <text>Требует установленного мода "Immersive Ammo Check". (Исключение: "Использовать текст и цвета AmmoCheck" рисует самостоятельно и работает без него.)</text>

@@ -1,0 +1,265 @@
+-- Ammo Check - No Inspect on Unjam
+-- WPO No Inspection on Unjam integration
+--
+-- Optional feature: pressing the unjam control on a weapon that is NOT jammed
+-- (Weapon Parts Overhaul / arti_jamming) normally plays the long "bored" inspect
+-- animation and grants a free no-jam shot.
+-- With this on, a non-jammed weapon just reports its status (functional / missing parts) with no animation and no free shot.
+-- A genuinely jammed weapon still unjams normally.
+
+-- MCM: rax_ammo_check/hud_behavior/wpo_mode. 0 = "No Inspect on Unjam (Non-Jammed)" (default),
+-- 1 = "Inspect Non-Jammed Weapon on Reload". The two are mutually exclusive behaviors.
+local enabled = true            -- mode 0: suppress WPO's bored inspect on unjam of a non-jammed weapon
+local inspect_on_reload = false -- mode 1: play inspect when a reload would be a no-op
+local grant_on_check = true     -- MCM: rax_ammo_check/hud_behavior/no_jam_after_check (default ON)
+
+local okwc_owns_reload = false  -- cached: One-Key drives the Reload bind, so leave that key to it
+local reload_inspect_cooldown_until = 0  -- guard against key auto-repeat replaying the inspect
+local dbg = false               -- mirrors MCM debug_mode
+
+local RELOAD_BINDS = {
+    [key_bindings.kWPN_RELOAD] = true,
+    [key_bindings.kCUSTOM22] = true,
+}
+
+local orig_unjam = nil
+
+local function noop() end
+
+local function print_dbg(...)
+    if dbg then printf(...) end
+end
+
+local function new_unjam(wpn)
+    if not arti_jamming then return end
+
+    local weapon = wpn or (db.actor and db.actor:active_item())
+    if not weapon then return end
+
+    -- feature off: hand back to the original (plays the bored inspect, grants the free shot)
+    if not enabled then
+        if orig_unjam then orig_unjam(wpn) end
+        return
+    end
+
+    local id = weapon:id()
+
+    -- jammed weapon: original unjam logic (animation, sound, clears the jam)
+    if arti_jamming.get_jammed and arti_jamming.get_jammed(id) then
+        if orig_unjam then orig_unjam(wpn) end
+        return
+    end
+
+    -- not jammed: report status only, no bored animation and no guarantee_not_jam
+
+    -- not a parts weapon (mirrors the original "nothing to inspect" branch)
+    if not (arti_jamming.has_parts and arti_jamming.has_parts(weapon)) then
+        arti_jamming.send_msg(game.translate_string("ui_st_nothing"), 1)
+        return
+    end
+
+    -- a required part is missing
+    if arti_jamming.missing_parts and arti_jamming.missing_parts(weapon) then
+        arti_jamming.send_msg(game.translate_string("ui_st_missing"), 0)
+        return
+    end
+
+    -- functional, plus an overheat note when applicable
+    local str = game.translate_string("ui_st_functional")
+    if arti_jamming.get_overheat_modifier then
+        local heat_lvl = arti_jamming.get_overheat_modifier(weapon, false)
+        if heat_lvl and heat_lvl > 0 then
+            str = str .. game.translate_string("ui_st_heat" .. heat_lvl)
+        end
+    end
+    arti_jamming.send_msg(str, 1)
+end
+
+-- Set WPO's guarantee_not_jam (the free no-jam shot) without playing an animation or showing a
+-- message. WPO exposes no setter for that local, but its bored-inspect path (the non-jammed branch
+-- of the original unjam) does set it. We replay that branch with WPO's animation and message
+-- functions temporarily silenced, so only the flag is set. No-op unless WPO is present.
+local function do_grant(weapon)
+    if not (arti_jamming and orig_unjam) then return end
+    weapon = weapon or (db.actor and db.actor:active_item())
+    if not weapon then return end
+
+    -- only the non-jammed branch grants the shot; a jammed weapon must actually be unjammed first
+    if arti_jamming.get_jammed and arti_jamming.get_jammed(weapon:id()) then return end
+
+    local saved_play = arti_jamming.play_anim
+    local saved_msg  = arti_jamming.send_msg
+    arti_jamming.play_anim = noop
+    arti_jamming.send_msg  = noop
+    -- call the captured original (not our wrapper) so it runs the real grant path
+    pcall(orig_unjam, weapon)
+    arti_jamming.play_anim = saved_play
+    arti_jamming.send_msg  = saved_msg
+end
+
+-- Public: re-grant the free no-jam shot after one of OUR inspect animations (One-Key / Fire Mode
+-- inspect) has played
+function grant_no_jam_after_inspect(weapon)
+    if not enabled then return end
+    do_grant(weapon)
+end
+
+-- Public: grant the free no-jam shot after one of OUR ammo-check animations has played
+function grant_no_jam_after_check(weapon)
+    if not grant_on_check then return end
+    do_grant(weapon)
+end
+
+-- ### Inspect non-jammed weapon on reload
+-- When the player presses Reload but the reload no-ops and the weapon is not jammed, play a look-over inspect
+local INSPECT_ANIMS = { "anm_bore", "anm_inspect", "anm_ammo_check" }
+
+local function play_nonjammed_inspect(weapon)
+    if not (weapon and weapon.play_hud_motion) then return false end
+    if not (animation_common and animation_common.has_animation) then return false end
+    local sec = weapon:section()
+    for i = 1, #INSPECT_ANIMS do
+        local anm = INSPECT_ANIMS[i]
+        if animation_common.has_animation(sec, anm) then
+            weapon:play_hud_motion(anm, true, 7, 1, 0)
+            -- report the window so the DoF-on-inspect feature can blur for its duration
+            if ammo_check_mcm and ammo_check_mcm.note_inspect_anim then
+                ammo_check_mcm.note_inspect_anim(weapon, anm)
+            end
+            do_grant(weapon)  -- a real inspect earns the free no-jam shot (when WPO is present)
+            return true
+        end
+    end
+    return false
+end
+
+-- True when pressing Reload would not actually load anything: a full magazine (either setup), or
+-- nothing available to load, etc
+local function reload_is_noop(weapon)
+    local sec = weapon:section()
+    local cur = weapon:get_ammo_in_magazine() or 0
+    local cap = SYS_GetParam(2, sec, "ammo_mag_size", 0) or 0
+    if cap > 0 and cur >= cap then return true end  -- magazine already full
+
+    if magazines and magazine_binder and magazine_binder.is_supported_weapon(weapon) then
+        -- mags setup: reload swaps in a magazine from inventory; no-op when none has ammo
+        if magazines.count_magazines then
+            local mags = magazines.count_magazines(weapon)
+            return (not mags) or (next(mags) == nil)
+        end
+        return false
+    end
+
+    -- vanilla: reload loads loose rounds; no-op when no compatible ammo is carried
+    local ammo_class = SYS_GetParam(0, sec, "ammo_class")
+    if not ammo_class then return false end
+    local list = str_explode(ammo_class, ",")
+    for i = 1, #list do
+        if list[i] and db.actor:object(list[i]) then return false end
+    end
+    return true
+end
+
+-- Runs before the engine acts on the Reload key
+-- If the reload would be a no-op on an idle, non-jammed firearm, play the inspect and consume the press
+function on_before_key_press(key, bind, dis, flags)
+    if not inspect_on_reload then return end
+    if okwc_owns_reload then return end
+    bind = bind or dik_to_bind(key)
+    if not RELOAD_BINDS[bind] then return end
+
+    local actor = db.actor
+    if not actor then return end
+    local weapon = actor:active_item()
+    if not (weapon and IsWeapon(weapon)) then return end
+
+    local jammed = arti_jamming and arti_jamming.get_jammed and arti_jamming.get_jammed(weapon:id()) and true or false
+    local noop_reload = reload_is_noop(weapon)
+    print_dbg("![AC-NIU] reload key: bind=%s state=%s gren=%s jammed=%s noop=%s sec=%s",
+        tostring(bind), tostring(weapon:get_state()), tostring(weapon:weapon_in_grenade_mode()),
+        tostring(jammed), tostring(noop_reload), weapon:section())
+
+    if weapon:get_state() ~= 0 or weapon:weapon_in_grenade_mode() then return end
+    if jammed then return end          -- jammed: leave to unjam
+    if not noop_reload then return end  -- a real reload is possible: let it run
+
+    local now = time_global()
+    if now < reload_inspect_cooldown_until then flags.ret_value = false return end
+    reload_inspect_cooldown_until = now + 1000
+
+    local played = play_nonjammed_inspect(weapon)
+    print_dbg("![AC-NIU] reload-inspect played=%s", tostring(played))
+    if played then
+        flags.ret_value = false
+    end
+end
+
+-- Public: One-Key calls this from its reload executor (it owns the Reload bind, so our key handler above defers to it)
+function try_reload_inspect(weapon)
+    if not inspect_on_reload then return false end
+    weapon = weapon or (db.actor and db.actor:active_item())
+    if not (weapon and IsWeapon(weapon)) then return false end
+    if weapon:weapon_in_grenade_mode() then return false end
+    if arti_jamming and arti_jamming.get_jammed and arti_jamming.get_jammed(weapon:id()) then return false end
+    if not reload_is_noop(weapon) then return false end
+    local played = play_nonjammed_inspect(weapon)
+    print_dbg("![AC-NIU] try_reload_inspect: played=%s sec=%s", tostring(played), weapon:section())
+    return played
+end
+
+-- Public: force a proper WPO weapon inspection (bored animation + free no-jam shot) on a NON-jammed
+-- weapon, bypassing the "No Inspect on Unjam" suppression
+-- Needed for OKWC "Force WPO weapon inspect" option to work work (you got it, right?)
+function force_wpo_inspect(weapon)
+    if not (arti_jamming and orig_unjam) then return false end
+    weapon = weapon or (db.actor and db.actor:active_item())
+    if not weapon then return false end
+    if arti_jamming.get_jammed and arti_jamming.get_jammed(weapon:id()) then return false end
+    orig_unjam(weapon)
+    print_dbg("![AC-NIU] force_wpo_inspect: ran on %s", weapon:section())
+    return true
+end
+
+-- Install our wrapper once. unjam_wep is an alias the engine/other mods may call, so route it too
+local function apply_patch()
+    if not arti_jamming then return end
+    if arti_jamming.unjam and arti_jamming.unjam ~= new_unjam then
+        orig_unjam = arti_jamming.unjam
+        arti_jamming.unjam = new_unjam
+        arti_jamming.unjam_wep = new_unjam
+    end
+end
+
+function on_option_change()
+    if not ui_mcm then return end
+    local m = ui_mcm.get("rax_ammo_check/hud_behavior/wpo_mode") or 0
+    enabled = (m == 0)             -- mode 0: no inspect on unjam
+    inspect_on_reload = (m == 1)   -- mode 1: inspect on no-op reload
+    local c = ui_mcm.get("rax_ammo_check/hud_behavior/no_jam_after_check")
+    grant_on_check = (c == true or c == 1 or c == nil)  -- default true
+    local d = ui_mcm.get("rax_ammo_check/debug/debug_mode")
+    dbg = (d == true or d == 1)
+
+    -- One-Key owns the Reload bind when enabled and its key resolves to kWPN_RELOAD; defer to it
+    local oke = ui_mcm.get("rax_ammo_check/onekey/enable")
+    if oke == true or oke == 1 then
+        local okey = ui_mcm.get("rax_ammo_check/onekey/key_reload") or DIK_keys.DIK_R
+        okwc_owns_reload = okey ~= DIK_keys.DIK_ESCAPE and dik_to_bind(okey) == key_bindings.kWPN_RELOAD
+    else
+        okwc_owns_reload = false
+    end
+    print_dbg("![AC-NIU] options: wpo_mode=%s enabled=%s inspect_on_reload=%s okwc_owns_reload=%s grant_on_check=%s",
+        tostring(m), tostring(enabled), tostring(inspect_on_reload), tostring(okwc_owns_reload), tostring(grant_on_check))
+end
+
+function actor_on_first_update()
+    on_option_change()
+end
+
+function on_game_start()
+    apply_patch()
+    RegisterScriptCallback("on_game_load", apply_patch)
+    RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
+    RegisterScriptCallback("on_option_change", on_option_change)
+    RegisterScriptCallback("on_before_key_press", on_before_key_press)
+end

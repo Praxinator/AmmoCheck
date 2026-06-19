@@ -331,6 +331,24 @@
     <string id="ui_mcm_rax_ammo_check_hud_behavior_auto_check_reload_desc">
         <text>Automatically display ammo status after completing a reload.</text>
     </string>
+    <string id="ui_mcm_rax_ammo_check_hud_behavior_wpo_mode">
+        <text>Non-Jammed Weapon Behavior</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_hud_behavior_wpo_mode_desc">
+        <text>How this mod handles a non-jammed weapon together with Weapon Parts Overhaul. "No Inspect on Unjam": pressing the unjam control on a non-jammed weapon only reports its status (functional / missing parts), with no bored inspect animation and no free no-jam shot (the free shot is re-granted instead by inspect and ammo-check animations). "Inspect Non-Jammed Weapon on Reload": pressing Reload when it would do nothing (magazine full, or nothing to load) plays a look-over inspect and grants the free no-jam shot, instead of nothing. A genuinely jammed weapon always unjams normally. Requires Weapon Parts Overhaul (arti_jamming).</text>
+    </string>
+    <string id="rax_ammo_check_hud_behavior_wpo_mode_lst_wpo_no_inspect">
+        <text>No Inspect on Unjam (Non-Jammed)</text>
+    </string>
+    <string id="rax_ammo_check_hud_behavior_wpo_mode_lst_wpo_inspect_reload">
+        <text>Inspect Non-Jammed Weapon on Reload</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_hud_behavior_no_jam_after_check">
+        <text>Free No-Jam Shot After Ammo Check</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_hud_behavior_no_jam_after_check_desc">
+        <text>When ON, performing one of this mod's ammo-check animations grants the same free no-jam shot Weapon Parts Overhaul normally gives for inspecting a weapon (a physical ammo check counts as handling the gun). Inspect animations from One-Key and Fire Mode also grant it whenever the behavior above is set to "No Inspect on Unjam". Only applies when an animation actually plays (animations enabled, weapon not busy). Requires Weapon Parts Overhaul (arti_jamming).</text>
+    </string>
 
     <!-- Animation Settings -->
     <string id="ui_mcm_rax_ammo_check_animation_enable_animations">
@@ -401,7 +419,7 @@
         <text>Empty Magazine Fallback</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_animation_empty_mag_fallback_desc">
-        <text>Animation to play when checking ammo with an empty magazine inserted. "Reload Animation" plays the full reload animation without actually loading ammo. "Animate" tries anm_bore/anm_idle. "Lower Weapon" just lowers the weapon briefly.</text>
+        <text>Animation to play when checking ammo with an empty magazine inserted. "Reload Animation" plays the full reload animation without actually loading ammo. "Animate" tries anm_bore/anm_idle. "Shake/Lower Weapon" gives a short weapon shake (or a lower on weapons without an inspect animation), same as the No-Magazine option.</text>
     </string>
     <string id="rax_ammo_check_animation_empty_mag_fallback_lst_empty_mag_reload_anim">
         <text>Reload Animation</text>
@@ -410,7 +428,7 @@
         <text>Animate (anm_bore/idle)</text>
     </string>
     <string id="rax_ammo_check_animation_empty_mag_fallback_lst_empty_mag_lower">
-        <text>Lower Weapon</text>
+        <text>Shake/Lower Weapon</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_animation_treat_one_chamber_as_non_empty">
         <text>Treat 1 in a Chamber as Non-Empty Mag</text>
@@ -472,6 +490,12 @@
     <string id="ui_mcm_rax_ammo_check_hud_behavior_dof_on_check_desc">
         <text>Blur the background and focus the weapon while a check animation plays, then ease back when it ends. Uses the Screen Space Shaders weapon depth-of-field and its configured blur amount; does nothing if Screen Space Shaders is not installed.</text>
     </string>
+    <string id="ui_mcm_rax_ammo_check_hud_behavior_dof_on_inspect">
+        <text>Depth of Field During Inspect</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_hud_behavior_dof_on_inspect_desc">
+        <text>Same as above but only for the pure cosmetic Inspect Weapon action (the look-over animation, no ammo readout) bound through One-Key or Fire Mode Check. Independent of Depth of Field During Check. Uses the Screen Space Shaders weapon depth-of-field; does nothing if Screen Space Shaders is not installed.</text>
+    </string>
     <string id="ui_mcm_rax_ammo_check_keybind_reload_warn">
         <text>Ammo Check key cannot be the Reload key - cleared. Use One-Key Weapon Controls for reload-triggered checks.</text>
     </string>
@@ -506,7 +530,7 @@
         <text>Hold a modifier and press Reload for a faster reload that DROPS the old magazine on the ground instead of keeping it (a tactical speed reload).</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_fastreload_mags_note">
-        <text>Requires the Magazines mod (Anomaly Magazines Redux) AND Dynamic Reload Speeds. Dynamic Reload Speeds drives the sped-up animation and keeps the reload sound in sync; without it Fast Reload does nothing.</text>
+        <text>Requires the Magazines mod (ATHI's Mags Reloaded) AND Dynamic Reload Speeds. Dynamic Reload Speeds drives the sped-up animation and keeps the reload sound in sync; without it Fast Reload does nothing.</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_fastreload_enable">
         <text>Enable Fast Reload</text>
@@ -584,7 +608,7 @@
         <text>One Key Weapon Controls</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_desc">
-        <text>Multiplex a single key into several weapon actions: tap to reload, tap + modifier to unjam, double-tap to switch ammo type, hold to check ammo. Magazine actions use Anomaly Magazines Redux when installed, otherwise they fall back to the engine reload.</text>
+        <text>Multiplex a single key into several weapon actions: tap to reload, tap + modifier to unjam, double-tap to switch ammo type, hold to check ammo. Magazine actions use ATHI's Mags Reloaded when installed, otherwise they fall back to the engine reload.</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_enable">
         <text>Enable One Key Controls</text>
@@ -614,7 +638,7 @@
         <text>Tap Action</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_tap_behavior_desc">
-        <text>What a single tap does. Holding the modifier and tapping always unjams (and takes priority over this). Situational: ammo wheel when 3+ types are available, swap to next when exactly 2, reload when fewer. Next Ammo Type: cycle to the next available type. Ammo Wheel: always open the wheel. Reload: just reload. Fast Reload: speed reload that drops the old mag. Ammo Check: play the inspect/check.</text>
+        <text>What a single tap does. Holding the modifier and tapping always unjams (and takes priority over this). Situational: ammo wheel when 3+ types are available, swap to next when exactly 2, reload when fewer. Next Ammo Type: cycle to the next available type. Ammo Wheel: always open the wheel. Reload: just reload. Fast Reload: speed reload that drops the old mag. Ammo Check: play the inspect/check. Inspect Weapon: play the same animation but show no ammo readout.</text>
     </string>
     <string id="rax_ammo_check_onekey_tap_behavior_lst_tp_none">
         <text>None (Disabled)</text>
@@ -634,6 +658,9 @@
     <string id="rax_ammo_check_onekey_tap_behavior_lst_tp_check">
         <text>Ammo Check</text>
     </string>
+    <string id="rax_ammo_check_onekey_tap_behavior_lst_tp_inspect">
+        <text>Inspect Weapon</text>
+    </string>
     <string id="rax_ammo_check_onekey_tap_behavior_lst_tp_situational">
         <text>Situational</text>
     </string>
@@ -641,7 +668,7 @@
         <text>Double-Tap Action</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_doubletap_behavior_desc">
-        <text>What a double-tap does. Situational: ammo wheel when 3+ types are available, swap to next when exactly 2, reload when fewer. Next Ammo Type: cycle to the next available type. Ammo Wheel: always open the wheel. Reload: just reload. Ammo Check: play the inspect/check.</text>
+        <text>What a double-tap does. Situational: ammo wheel when 3+ types are available, swap to next when exactly 2, reload when fewer. Next Ammo Type: cycle to the next available type. Ammo Wheel: always open the wheel. Reload: just reload. Ammo Check: play the inspect/check. Inspect Weapon: play the same animation but show no ammo readout.</text>
     </string>
     <string id="rax_ammo_check_onekey_doubletap_behavior_lst_dt_none">
         <text>None (Disabled)</text>
@@ -661,6 +688,9 @@
     <string id="rax_ammo_check_onekey_doubletap_behavior_lst_dt_check">
         <text>Ammo Check</text>
     </string>
+    <string id="rax_ammo_check_onekey_doubletap_behavior_lst_dt_inspect">
+        <text>Inspect Weapon</text>
+    </string>
     <string id="rax_ammo_check_onekey_doubletap_behavior_lst_dt_situational">
         <text>Situational</text>
     </string>
@@ -668,7 +698,7 @@
         <text>Hold Action</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_hold_behavior_desc">
-        <text>What holding the key does. Ammo Check: play the inspect/check. Reload: just reload. Fast Reload: speed reload that drops the old mag. Next Ammo Type: cycle to the next type. Ammo Wheel: open the wheel. Situational: wheel/next/reload by how many types are available. None: holding does nothing, the press still runs the tap action on release.</text>
+        <text>What holding the key does. Ammo Check: play the inspect/check. Inspect Weapon: play the same animation but show no ammo readout. Reload: just reload. Fast Reload: speed reload that drops the old mag. Next Ammo Type: cycle to the next type. Ammo Wheel: open the wheel. Situational: wheel/next/reload by how many types are available. None: holding does nothing, the press still runs the tap action on release.</text>
     </string>
     <string id="rax_ammo_check_onekey_hold_behavior_lst_ho_none">
         <text>None (Disabled)</text>
@@ -687,6 +717,9 @@
     </string>
     <string id="rax_ammo_check_onekey_hold_behavior_lst_ho_check">
         <text>Ammo Check</text>
+    </string>
+    <string id="rax_ammo_check_onekey_hold_behavior_lst_ho_inspect">
+        <text>Inspect Weapon</text>
     </string>
     <string id="rax_ammo_check_onekey_hold_behavior_lst_ho_situational">
         <text>Situational</text>
@@ -917,6 +950,12 @@
     <string id="ui_mcm_rax_ammo_check_onekey_modifier_unjam_desc">
         <text>Hold this modifier and tap the One Key to unjam the weapon instead of reloading. Needs Weapon Parts Overhaul (arti_jamming).</text>
     </string>
+    <string id="ui_mcm_rax_ammo_check_onekey_force_wpo_inspect">
+        <text>Force WPO Weapon Inspect on Unjam Modifier</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_onekey_force_wpo_inspect_desc">
+        <text>When ON, holding the Unjam Modifier and tapping the One Key on a NON-jammed weapon forces a proper Weapon Parts Overhaul inspection (the bored inspect animation plus the free no-jam shot), even when the Non-Jammed Weapon Behavior is set to "No Inspect on Unjam". Only applies to the modifier press; a jammed weapon still unjams as usual. Needs Weapon Parts Overhaul (arti_jamming).</text>
+    </string>
     <string id="ui_mcm_rax_ammo_check_firemode_modifier_prev">
         <text>Previous Mode Modifier</text>
     </string>
@@ -944,7 +983,7 @@
         <text>One key ejects the round currently in the chamber back into your inventory and chambers the next round from the magazine. Useful after switching magazines with 1 in chamber: eject the old round so the next shot comes from the new mag. Bolt-action and pump weapons play their bolt cycle animation.</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_eject_mags_note">
-        <text>Magazine-fed weapons need Anomaly Magazines Redux with its "1 in chamber" option enabled. Weapons outside the magazine system (internal-mag bolt rifles like the Mosin) always eject directly.</text>
+        <text>Magazine-fed weapons need ATHI's Mags Reloaded with its "1 in chamber" option enabled. Weapons outside the magazine system (internal-mag bolt rifles like the Mosin) always eject directly.</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_eject_enable">
         <text>Enable</text>
@@ -1054,6 +1093,9 @@
     </string>
     <string id="ui_mcm_rax_ammo_check_hdr_behavior">
         <text>Behavior</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_hdr_wpo">
+        <text>WPO (Weapon Parts Overhaul)</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_hdr_mode">
         <text>Mode</text>

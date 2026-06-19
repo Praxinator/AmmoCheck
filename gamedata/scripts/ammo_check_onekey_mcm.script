@@ -1,7 +1,7 @@
 -- This script was taken & Modified from One-Key Weapon Controls mod by ??? (uknown author, probably TedHo)
 -- Optional feature in AmmoCheck (disabled by default). Multiplexes a single key (default Reload) into several actions.
 -- tap, double-tap and hold are each independently configurable and pick from the SAME action set:
---   none / reload / fast_reload / next_ammo_type / ammo_wheel / ammo_check / situational
+--   none / reload / fast_reload / next_ammo_type / ammo_wheel / ammo_check / inspect / situational
 --   tap                 : configurable (default reload)
 --   tap + modifier      : unjam (needs Weapon Parts Overhaul / arti_jamming); takes priority over the tap action
 --   double-tap          : configurable (default situational)
@@ -9,13 +9,14 @@
 -- The MCM options live in ammo_check_mcm.script (the rax_ammo_check page); this script
 -- only reads them and runs the logic.
 --
--- Magazine actions soft-depend on Anomaly Magazines Redux (magazines / magazine_binder).
+-- Magazine actions soft-depend on ATHI's Mags Reloaded (magazines / magazine_binder).
 -- When those are absent the code falls back to the engine reload / ammo switch, so the
 -- feature still works on a vanilla (no-mags) setup.
 
 local enabled                 = false
 local mcm_key_reload          = DIK_keys.DIK_R
 local mcm_modifier_unjam      = 2          -- 1 shift, 2 ctrl, 3 alt
+local mcm_force_wpo_inspect   = false      -- modifier-unjam forces a proper WPO inspect on a non-jammed weapon
 -- tap / double-tap / hold each pick from the SAME action set:
 -- none / reload / fast_reload / next_ammo_type / ammo_wheel / ammo_check / situational
 local mcm_tap_behavior        = "reload"       -- plain tap (modifier+tap still unjams, see okr_do_single_action)
@@ -165,6 +166,8 @@ function on_option_change()
         mcm_key_reload = ui_mcm.get("rax_ammo_check/onekey/key_reload") or DIK_keys.DIK_R
     end
     mcm_modifier_unjam = ui_mcm.get("rax_ammo_check/onekey/modifier_unjam") or 2
+    local fwi = ui_mcm.get("rax_ammo_check/onekey/force_wpo_inspect")
+    mcm_force_wpo_inspect = (fwi == true or fwi == 1)
     mcm_tap_behavior = ui_mcm.get("rax_ammo_check/onekey/tap_behavior") or "reload"
     mcm_doubletap_behavior = ui_mcm.get("rax_ammo_check/onekey/doubletap_behavior") or "situational"
     mcm_hold_behavior = ui_mcm.get("rax_ammo_check/onekey/hold_behavior") or "ammo_check"
@@ -277,6 +280,16 @@ local function do_okr_action(behavior, weapon)
             -- mid-draw: run the check right after the weapon settles in hands
             okr_defer_action("check", true, function() ammo_check_mcm.check_Ammo() end)
         end
+    elseif behavior == "inspect" then
+        -- look-over animation only, no ammo readout
+        local w = db.actor and db.actor:active_item()
+        if w and IsWeapon(w) and w:get_state() == 0 then
+            play_inspect_anim(w)
+        else
+            okr_defer_action("inspect", true, function()
+                play_inspect_anim(db.actor and db.actor:active_item())
+            end)
+        end
     elseif behavior == "situational" then
         -- ammo wheel when 3+ types are available, swap to next when exactly 2, reload when fewer
         if not weapon then try_reload_weapon() return end
@@ -303,13 +316,21 @@ function okr_do_single_action()
         -- unjam takes priority over the configured tap action: when the modifier is held, OR when
         -- "Reload Key Unjams" is on and the weapon is currently jammed. Otherwise run the tap action.
         local do_unjam = okr_pending_unjam
+        local by_modifier = okr_pending_unjam  -- true only when the unjam modifier was held
         if not do_unjam and mcm_reload_key_unjams then
             local wpn = db.actor and db.actor:item_in_slot(db.actor:active_slot())
             do_unjam = weapon_is_jammed(wpn)
         end
         if OKR_DEBUG then printf("[AC-OKR] single action: %s", do_unjam and "unjam" or tostring(mcm_tap_behavior)) end
         if do_unjam then
-            try_unjam_weapon()
+            -- Modifier-driven unjam with "Force WPO weapon inspect" on
+            if by_modifier and mcm_force_wpo_inspect and ammo_check_no_inspect_mcm
+               and ammo_check_no_inspect_mcm.force_wpo_inspect
+               and ammo_check_no_inspect_mcm.force_wpo_inspect() then
+                -- handled: forced inspect ran on a non-jammed weapon
+            else
+                try_unjam_weapon()
+            end
         else
             do_okr_action(mcm_tap_behavior, db.actor and db.actor:active_item())
         end
@@ -489,6 +510,28 @@ end
 
 -- ### Actions
 
+-- Play a weapon-inspection animation only (no ammo readout), the same approach the fire-mode
+-- feature uses
+local INSPECT_ANIMS = { "anm_bore", "anm_inspect", "anm_ammo_check" }
+
+function play_inspect_anim(weapon)
+    if not (weapon and weapon.play_hud_motion) then return false end
+    if not (animation_common and animation_common.has_animation) then return false end
+    local sec = weapon:section()
+    for i = 1, #INSPECT_ANIMS do
+        local anm = INSPECT_ANIMS[i]
+        if animation_common.has_animation(sec, anm) then
+            weapon:play_hud_motion(anm, true, 7, 1, 0)
+            -- report the window so the "DoF on inspect" feature can blur for its duration
+            if ammo_check_mcm and ammo_check_mcm.note_inspect_anim then
+                ammo_check_mcm.note_inspect_anim(weapon, anm)
+            end
+            return true
+        end
+    end
+    return false
+end
+
 function try_unjam_weapon()
     local weapon = db.actor:item_in_slot(db.actor:active_slot())
     if weapon and arti_jamming and arti_jamming.unjam then
@@ -524,6 +567,12 @@ function try_reload_weapon()
 
     -- never reload a jammed weapon (it must be unjammed first)
     if weapon_is_jammed(weapon) then
+        return
+    end
+
+    -- WPO "Inspect Non-Jammed Weapon on Reload" mode
+    if ammo_check_no_inspect_mcm and ammo_check_no_inspect_mcm.try_reload_inspect
+       and ammo_check_no_inspect_mcm.try_reload_inspect(weapon) then
         return
     end
 

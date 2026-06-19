@@ -99,7 +99,7 @@ local show_chamber_mismatch = false  -- on "Full + 1", also show the chambered r
 busy_hands_delay = 1  -- [non-local: upvalue budget]
 no_magazine_fallback = 1  -- 0: hide/show, 1: lower, 2: none (for Fake Reload mode when no mag loaded)  [non-local: upvalue budget]
 fake_reload_fallback = 1  -- 0: hide/show, 1: lower (for internal mag weapons)  [non-local: upvalue budget]
-empty_mag_fallback = 0    -- 0: reload anim (state=0), 1: anm_bore/idle, 2: lower weapon  [non-local: upvalue budget]
+empty_mag_fallback = 0    -- 0: reload anim (state=0), 1: anm_bore/idle, 2: shake/lower weapon  [non-local: upvalue budget]
 fake_reload_bolt_cycle = true  -- enable bolt cycle for INTERNAL-mag bolt-action rifles  [non-local: upvalue budget]
 force_bolt_cycle_external_mag = false  -- when true, external-mag bolt-action variants play explicit bolt cycle instead of fake reload  [non-local: upvalue budget]
 local treat_one_chamber_as_non_empty = false  -- when false (default) "1 in chamber, mag empty" plays anm_ammo_check_empty. Set true to revert to engine default (anm_ammo_check still plays because total ammo > 0).
@@ -2215,6 +2215,10 @@ end
 
 -- shared interrupt cleanup for ADS / weapon fire while a check is mid-play
 local function ac_cancel_active_check(reason)
+    if is_inspect_animating() then
+        ac_clear_anim_cam_effectors()
+        ac_inspect_until = 0
+    end
     if not (is_fake_reload or do_ammo_check_anim or ac_pending_inspect_anim_playing) then return end
     print_dbg("Ammo check interrupted by %s - cancelling pending message/events.", reason)
     -- The fake reload runs on weapon:play_hud_motion (the item HUD layer), not the
@@ -2559,6 +2563,13 @@ function on_mcm_load()
                 { id = "check_grenade_mode", type = "check", val = 1, def = false },
                 { id = "auto_check_reload", type = "check", val = 1, def = false },
                 { id = "dof_on_check", type = "check", val = 1, def = false },
+                { id = "dof_on_inspect", type = "check", val = 1, def = false },
+
+                { id = "hdr_wpo", type = "title", text = "ui_mcm_rax_ammo_check_hdr_wpo", align = "l", clr = MCM_HDR_CLR },
+                { id = "wpo_mode", type = "list", val = 2, def = 0,
+                    content = { { 0, "wpo_no_inspect" }, { 1, "wpo_inspect_reload" } }
+                },
+                { id = "no_jam_after_check", type = "check", val = 1, def = true },
             }},
 
             -- ### Floating Mag HUD (comp code lives in ammo_check_maghud_mcm.script)
@@ -2691,14 +2702,15 @@ function on_mcm_load()
                 { id = "modifier_unjam", type = ui_mcm.kb_mod_radio, val = 2, def = 2,
                     content = { { 1, "mcm_kb_mod_shift" }, { 2, "mcm_kb_mod_ctrl" }, { 3, "mcm_kb_mod_alt" } }
                 },
+                { id = "force_wpo_inspect", type = "check", val = 1, def = false },
                 { id = "tap_behavior", type = "list", val = 0, def = "reload",
-                    content = { { "none", "tp_none" }, { "reload", "tp_reload" }, { "fast_reload", "tp_fast_reload" }, { "next_ammo_type", "tp_next" }, { "ammo_wheel", "tp_wheel" }, { "ammo_check", "tp_check" }, { "situational", "tp_situational" } }
+                    content = { { "none", "tp_none" }, { "reload", "tp_reload" }, { "fast_reload", "tp_fast_reload" }, { "next_ammo_type", "tp_next" }, { "ammo_wheel", "tp_wheel" }, { "ammo_check", "tp_check" }, { "inspect", "tp_inspect" }, { "situational", "tp_situational" } }
                 },
                 { id = "doubletap_behavior", type = "list", val = 0, def = "situational",
-                    content = { { "none", "dt_none" }, { "reload", "dt_reload" }, { "fast_reload", "dt_fast_reload" }, { "next_ammo_type", "dt_next" }, { "ammo_wheel", "dt_wheel" }, { "ammo_check", "dt_check" }, { "situational", "dt_situational" } }
+                    content = { { "none", "dt_none" }, { "reload", "dt_reload" }, { "fast_reload", "dt_fast_reload" }, { "next_ammo_type", "dt_next" }, { "ammo_wheel", "dt_wheel" }, { "ammo_check", "dt_check" }, { "inspect", "dt_inspect" }, { "situational", "dt_situational" } }
                 },
                 { id = "hold_behavior", type = "list", val = 0, def = "ammo_check",
-                    content = { { "none", "ho_none" }, { "reload", "ho_reload" }, { "fast_reload", "ho_fast_reload" }, { "next_ammo_type", "ho_next" }, { "ammo_wheel", "ho_wheel" }, { "ammo_check", "ho_check" }, { "situational", "ho_situational" } }
+                    content = { { "none", "ho_none" }, { "reload", "ho_reload" }, { "fast_reload", "ho_fast_reload" }, { "next_ammo_type", "ho_next" }, { "ammo_wheel", "ho_wheel" }, { "ammo_check", "ho_check" }, { "inspect", "ho_inspect" }, { "situational", "ho_situational" } }
                 },
                 { id = "hold_ms", type = "track", val = 2, min = 100, max = 600, step = 25, def = 200 },
                 { id = "doubletap_ms", type = "track", val = 2, min = 50, max = 500, step = 25, def = 200 },
@@ -2963,6 +2975,14 @@ local function ac_lower_weapon_fallback(sec)
     end)
 end
 
+-- "Shake/Lower" fallback (same behavior as the No-Magazine "Shake/Lower" option)
+function ac_shake_lower_fallback(weapon, sec)
+    ac_suppress_inspect_until = time_global() + 1500
+    if weapon then weapon:switch_state(0) end
+    ac_clear_anim_cam_effectors()
+    ac_lower_weapon_fallback(sec)
+end
+
 -- pre-defined callback for restore weapon after hide
 local function restore_weapon_callback()
     local actor = db.actor
@@ -3031,6 +3051,34 @@ end
 
 function check_anim_ends_at()
     return ac_check_anim_ends_at
+end
+
+-- ### Cosmetic inspect window
+-- The pure "inspect" action (One-Key / fire-mode multiplexers) plays a look-over motion with
+-- weapon:play_hud_motion, which leaves the weapon logically idle and never sets the check-anim
+-- flags above
+ac_inspect_until = 0
+
+function note_inspect_anim(weapon, anim_name)
+    ac_inspect_until = 0
+    -- A real inspect just played (One-Key / Fire Mode)
+    if weapon and ammo_check_no_inspect_mcm and ammo_check_no_inspect_mcm.grant_no_jam_after_inspect then
+        ammo_check_no_inspect_mcm.grant_no_jam_after_inspect(weapon)
+    end
+    if not (weapon and game and game.get_motion_length and anim_name) then return end
+    local hud_sec = ini_sys:r_string_ex(weapon:section(), "hud") or weapon:section()
+    local len = game.get_motion_length(hud_sec, anim_name, 1)
+    if len and len > 0 then
+        ac_inspect_until = time_global() + len
+    end
+end
+
+function is_inspect_animating()
+    return time_global() < ac_inspect_until
+end
+
+function inspect_ends_at()
+    return ac_inspect_until
 end
 
 local function play_hud_animation(weapon, anim_name, sound_param)
@@ -3210,12 +3258,12 @@ local function play_reload_animation(weapon)
                 game.actor_lower_weapon(true)
             end
         else
-            print_dbg("Fake reload for empty mag weapon %s, lowering weapon", sec)
-            game.actor_lower_weapon(true)
+            print_dbg("Fake reload for empty mag weapon %s, shake/lower weapon", sec)
+            ac_shake_lower_fallback(weapon, sec)
         end
         return
     end
-    
+
     -- has ammo - use play_hud_motion to play reload animation without adding ammo
     print_dbg("Fake reload for %s, ammo count: %s, using play_hud_motion", sec, current_ammo)
     
@@ -3519,6 +3567,12 @@ function check_Ammo(skip_animation)
     ac_last_weapon_id = weaponId
     ac_message_until = 0  -- reset; will be set by display_ammo_status when the new message displays
     ac_check_anim_ends_at = 0  -- reset; set by the path that actually plays an anim this press
+
+    -- WPO free no-jam shot for performing an ammo check (optional, default ON)
+    if enable_animations and not weapon_busy and ammo_check_no_inspect_mcm
+       and ammo_check_no_inspect_mcm.grant_no_jam_after_check then
+        ammo_check_no_inspect_mcm.grant_no_jam_after_check(weapon)
+    end
 
     -- get ammo status using shared function
     local message, clr, ammo_type, separate_tag, segments = get_ammo_status(weapon, weaponId, sec, in_grenade_mode, currentAmmo)
@@ -4463,7 +4517,14 @@ function check_Ammo(skip_animation)
             end
             -- fall through to fake_reload_fallback if no safe animation found
         end
-        
+
+        -- empty_mag_fallback "Shake/Lower Weapon": same shake + lower as the No-Magazine option
+        if empty_mag_fallback == 2 then
+            print_dbg("Ammo check for %s - empty mag fallback, shake/lower weapon.", sec)
+            ac_shake_lower_fallback(weapon, sec)
+            return
+        end
+
         -- [ fallback: use fake_reload_fallback ]--
         if fake_reload_fallback == 0 then
             -- hide/show weapon

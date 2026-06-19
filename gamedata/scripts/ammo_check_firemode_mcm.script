@@ -665,6 +665,10 @@ local function inspect_weapon(weapon)
         local anm = INSPECT_ANIMS[i]
         if animation_common.has_animation(sec, anm) then
             weapon:play_hud_motion(anm, true, 7, 1, 0)
+            -- report the window so the "DoF on inspect" feature can blur for its duration
+            if ammo_check_mcm and ammo_check_mcm.note_inspect_anim then
+                ammo_check_mcm.note_inspect_anim(weapon, anm)
+            end
             return true
         end
     end

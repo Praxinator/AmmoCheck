@@ -158,7 +158,7 @@
         <text>Минималистичная шкала</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_display_minimalist_bar_desc">
-        <text>Заменяет сообщение о патронах минималистичной шкалой из 6 блоков (закрашенные блоки = остаток патронов) вместо текста или цифр. Также обрабатывает "один в патроннике" (+), пустой/отсутствующий магазин (X______), заклинивание (X) и гранату (o). Переопределяет режим отображения. При включённых цветных сообщениях шкала окрашивается по уровню боезапаса.</text>
+        <text>Заменяет сообщение о патронах минималистичной шкалой из 6 блоков (закрашенные блоки = остаток патронов) вместо текста или цифр. Также обрабатывает "один в патроннике" (+), пустой/отсутствующий магазин (X______), клин (X) и гранату (o). Переопределяет режим отображения. При включённых цветных сообщениях шкала окрашивается по уровню боезапаса.</text>
     </string>    <string id="ui_mcm_rax_ammo_check_display_custom_render">
         <text>Альт. рендер текста</text>
     </string>
@@ -321,6 +321,24 @@
         <text>Автоматически показывать статус патронов после перезарядки.</text>
     </string>
 
+    <string id="ui_mcm_rax_ammo_check_hud_behavior_wpo_mode">
+        <text>Поведение исправного оружия</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_hud_behavior_wpo_mode_desc">
+        <text>Как этот мод обрабатывает исправное (не заклинившее) оружие вместе с Weapon Parts Overhaul. "Без осмотра при устранении задержки": нажатие клавиши устранения задержки на исправном оружии только показывает его состояние (исправно / нет деталей), без анимации осмотра и без бесплатного выстрела без риска клина (бесплатный выстрел вместо этого выдаётся за анимации осмотра и проверки патронов). "Осмотр исправного оружия при перезарядке": нажатие перезарядки, когда она ничего не делает (магазин полон или нечем заряжать), проигрывает анимацию осмотра и даёт бесплатный выстрел без риска клина вместо бездействия. Заклинившее оружие всегда устраняет задержку как обычно. Требует Weapon Parts Overhaul (arti_jamming).</text>
+    </string>
+    <string id="rax_ammo_check_hud_behavior_wpo_mode_lst_wpo_no_inspect">
+        <text>Без осмотра при устранении задержки (исправное)</text>
+    </string>
+    <string id="rax_ammo_check_hud_behavior_wpo_mode_lst_wpo_inspect_reload">
+        <text>Осмотр исправного оружия при перезарядке</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_hud_behavior_no_jam_after_check">
+        <text>Бесплатный выстрел без клина после проверки патронов</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_hud_behavior_no_jam_after_check_desc">
+        <text>Когда включено, выполнение анимации проверки патронов этого мода даёт тот же бесплатный выстрел без риска клина, который Weapon Parts Overhaul обычно даёт за осмотр оружия (физическая проверка засчитывается как обращение с оружием). Анимации осмотра из One-Key и Fire Mode тоже дают его, если выше включена опция "Без осмотра при устранении задержки". Работает только когда анимация действительно проигрывается (анимации включены, оружие не занято). Требует Weapon Parts Overhaul (arti_jamming).</text>
+    </string>
     <!-- Animation Settings -->
     <string id="ui_mcm_rax_ammo_check_animation_enable_animations">
         <text>Включить анимации</text>
@@ -389,7 +407,7 @@
         <text>Пустой магазин</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_animation_empty_mag_fallback_desc">
-        <text>Анимация при проверке с пустым магазином. "Перезарядка" - анимация без загрузки патронов. "Осмотр" - anm_bore/idle. "Опустить" - опустить оружие.</text>
+        <text>Анимация при проверке с пустым магазином. "Перезарядка" - анимация без загрузки патронов. "Осмотр" - anm_bore/idle. "Трясти/Опустить" - короткая тряска оружия (или опускание на оружии без анимации осмотра), как в опции "Без магазина".</text>
     </string>
     <string id="rax_ammo_check_animation_empty_mag_fallback_lst_empty_mag_reload_anim">
         <text>Анимация перезарядки</text>
@@ -398,7 +416,7 @@
         <text>Осмотр (anm_bore/idle)</text>
     </string>
     <string id="rax_ammo_check_animation_empty_mag_fallback_lst_empty_mag_lower">
-        <text>Опустить оружие</text>
+        <text>Трясти/Опустить оружие</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_animation_treat_one_chamber_as_non_empty">
         <text>Считать "1 в патроннике" не пустым магазином</text>
@@ -488,7 +506,7 @@
         <text>Удерживайте модификатор и нажмите Перезарядку для ускоренной перезарядки, которая ВЫБРАСЫВАЕТ старый магазин на землю, а не оставляет его (тактическая быстрая перезарядка).</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_fastreload_mags_note">
-        <text>Требует мод на магазины (Anomaly Magazines Redux) И Dynamic Reload Speeds. Dynamic Reload Speeds проигрывает ускоренную анимацию и синхронизирует звук перезарядки; без него Быстрая перезарядка не работает.</text>
+        <text>Требует мод на магазины (ATHI's Mags Reloaded) И Dynamic Reload Speeds. Dynamic Reload Speeds проигрывает ускоренную анимацию и синхронизирует звук перезарядки; без него Быстрая перезарядка не работает.</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_fastreload_enable">
         <text>Включить быструю перезарядку</text>
@@ -566,13 +584,13 @@
         <text>Управление оружием одной клавишей</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_desc">
-        <text>Назначить на одну клавишу несколько действий с оружием: нажатие - перезарядка, нажатие с модификатором - устранение задержки, двойное нажатие - смена типа патронов, удержание - проверка боезапаса. Для действий с магазинами используется Anomaly Magazines Redux, если установлен, иначе штатная перезарядка.</text>
+        <text>Назначить на одну клавишу несколько действий с оружием: нажатие - перезарядка, нажатие с модификатором - устранение клина, двойное нажатие - смена типа патронов, удержание - проверка боезапаса. Для действий с магазинами используется ATHI's Mags Reloaded, если установлен, иначе штатная перезарядка.</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_enable">
         <text>Включить управление одной клавишей</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_enable_desc">
-        <text>Главный переключатель. По умолчанию ВЫКЛ, клавиша Перезарядки работает как обычно. Включите, чтобы объединить перезарядку, устранение задержки, смену патронов и проверку боезапаса на одной клавише.</text>
+        <text>Главный переключатель. По умолчанию ВЫКЛ, клавиша Перезарядки работает как обычно. Включите, чтобы объединить перезарядку, устранение клина, смену патронов и проверку боезапаса на одной клавише.</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_key_reload">
         <text>Клавиша действия</text>
@@ -581,10 +599,10 @@
         <text>Клавиша всех действий One Key. Может совпадать с клавишей перезарядки из настроек игры (по умолчанию R): One Key автоматически перехватит её и выполнит перезарядку сам, двойного срабатывания не будет. Любая другая клавиша тоже работает и не трогает обычную перезарядку.</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_reload_key_unjams">
-        <text>Нажатие устраняет задержку</text>
+        <text>Нажатие устраняет клин</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_reload_key_unjams_desc">
-        <text>Если включено, обычное нажатие на заклинившем оружии устраняет задержку вместо перезарядки (без модификатора). Если оружие не заклинило, нажатие перезаряжает как обычно. Требует Weapon Parts Overhaul (arti_jamming).</text>
+        <text>Если включено, обычное нажатие на заклинившем оружии устраняет клин вместо перезарядки (без модификатора). Если оружие не заклинило, нажатие перезаряжает как обычно. Требует Weapon Parts Overhaul (arti_jamming).</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_focuses_pda">
         <text>Клавиша действия поднимает/опускает КПК</text>
@@ -596,7 +614,7 @@
         <text>Действие по нажатию</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_tap_behavior_desc">
-        <text>Что делает одиночное нажатие. Удержание модификатора с нажатием всегда устраняет заклинивание (и имеет приоритет над этим). Ситуативно: колесо патронов при 3+ типах, переключение на следующий при 2, перезарядка при меньшем количестве. Следующий тип: переключить на следующий доступный тип. Колесо патронов: всегда открывать колесо. Перезарядка: просто перезарядка. Быстрая перезарядка: скоростная перезарядка со сбросом старого магазина. Проверка патронов: проиграть осмотр/проверку.</text>
+        <text>Что делает одиночное нажатие. Удержание модификатора с нажатием всегда устраняет клин (и имеет приоритет над этим). Ситуативно: колесо патронов при 3+ типах, переключение на следующий при 2, перезарядка при меньшем количестве. Следующий тип: переключить на следующий доступный тип. Колесо патронов: всегда открывать колесо. Перезарядка: просто перезарядка. Быстрая перезарядка: скоростная перезарядка со сбросом старого магазина. Проверка патронов: проиграть осмотр/проверку.</text>
     </string>
     <string id="rax_ammo_check_onekey_tap_behavior_lst_tp_none">
         <text>Отключено</text>
@@ -615,6 +633,9 @@
     </string>
     <string id="rax_ammo_check_onekey_tap_behavior_lst_tp_check">
         <text>Проверка патронов</text>
+    </string>
+    <string id="rax_ammo_check_onekey_tap_behavior_lst_tp_inspect">
+        <text>Осмотр оружия</text>
     </string>
     <string id="rax_ammo_check_onekey_tap_behavior_lst_tp_situational">
         <text>Ситуативно</text>
@@ -643,6 +664,9 @@
     <string id="rax_ammo_check_onekey_doubletap_behavior_lst_dt_check">
         <text>Проверка патронов</text>
     </string>
+    <string id="rax_ammo_check_onekey_doubletap_behavior_lst_dt_inspect">
+        <text>Осмотр оружия</text>
+    </string>
     <string id="rax_ammo_check_onekey_doubletap_behavior_lst_dt_situational">
         <text>Ситуативно</text>
     </string>
@@ -669,6 +693,9 @@
     </string>
     <string id="rax_ammo_check_onekey_hold_behavior_lst_ho_check">
         <text>Проверка патронов</text>
+    </string>
+    <string id="rax_ammo_check_onekey_hold_behavior_lst_ho_inspect">
+        <text>Осмотр оружия</text>
     </string>
     <string id="rax_ammo_check_onekey_hold_behavior_lst_ho_situational">
         <text>Ситуативно</text>
@@ -895,10 +922,16 @@
         <text>HUD / Поведение</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_modifier_unjam">
-        <text>Модификатор устранения задержки</text>
+        <text>Модификатор устранения клина</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_onekey_modifier_unjam_desc">
-        <text>Удерживайте этот модификатор и нажмите клавишу One Key, чтобы устранить задержку оружия вместо перезарядки. Требует Weapon Parts Overhaul (arti_jamming).</text>
+        <text>Удерживайте этот модификатор и нажмите клавишу One Key, чтобы устранить клин оружия вместо перезарядки. Требует Weapon Parts Overhaul (arti_jamming).</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_onekey_force_wpo_inspect">
+        <text>Принудительный осмотр оружия WPO с модификатором устранения задержки</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_onekey_force_wpo_inspect_desc">
+        <text>Когда включено, удержание модификатора устранения задержки и нажатие One Key на исправном (не заклинившем) оружии принудительно проигрывает полноценный осмотр Weapon Parts Overhaul (анимацию осмотра и бесплатный выстрел без риска клина), даже если поведение исправного оружия выставлено на "Без осмотра при устранении задержки". Применяется только к нажатию с модификатором; заклинившее оружие по-прежнему устраняет задержку как обычно. Требует Weapon Parts Overhaul (arti_jamming).</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_firemode_modifier_prev">
         <text>Модификатор предыдущего режима</text>
@@ -927,7 +960,7 @@
         <text>Одна клавиша извлекает патрон из патронника обратно в инвентарь и досылает следующий патрон из магазина. Полезно после смены магазина с опцией "1 в патроннике": извлеките старый патрон, чтобы следующий выстрел был из нового магазина. Болтовое и помповое оружие проигрывает анимацию передёргивания затвора.</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_eject_mags_note">
-        <text>Для оружия с магазинами требуется Anomaly Magazines Redux с включённой опцией "1 в патроннике". Оружие вне системы магазинов (болтовые винтовки с неотъёмным магазином вроде Мосина) извлекает патрон напрямую.</text>
+        <text>Для оружия с магазинами требуется ATHI's Mags Reloaded с включённой опцией "1 в патроннике". Оружие вне системы магазинов (болтовые винтовки с неотъёмным магазином вроде Мосина) извлекает патрон напрямую.</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_eject_enable">
         <text>Включить</text>
@@ -1024,6 +1057,12 @@
     <string id="ui_mcm_rax_ammo_check_hud_behavior_dof_on_check_desc">
         <text>Размывает фон и фокусируется на оружии во время анимации проверки, затем плавно возвращает обратно по её окончании. Использует глубину резкости оружия из Screen Space Shaders и заданную там силу размытия; ничего не делает, если Screen Space Shaders не установлен.</text>
     </string>
+    <string id="ui_mcm_rax_ammo_check_hud_behavior_dof_on_inspect">
+        <text>Глубина резкости при осмотре</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_hud_behavior_dof_on_inspect_desc">
+        <text>То же, что и выше, но только для чистого косметического действия Осмотр оружия (анимация осмотра без показа боезапаса), назначенного через One-Key или Проверку режима огня. Не зависит от Глубины резкости при проверке. Использует глубину резкости оружия из Screen Space Shaders; ничего не делает, если Screen Space Shaders не установлен.</text>
+    </string>
     <string id="st_ac_no_grenade">
         <text>Нет гранаты</text>
     </string>
@@ -1055,6 +1094,9 @@
     </string>
     <string id="ui_mcm_rax_ammo_check_hdr_behavior">
         <text>Поведение</text>
+    </string>
+    <string id="ui_mcm_rax_ammo_check_hdr_wpo">
+        <text>WPO (Weapon Parts Overhaul)</text>
     </string>
     <string id="ui_mcm_rax_ammo_check_hdr_mode">
         <text>Режим</text>

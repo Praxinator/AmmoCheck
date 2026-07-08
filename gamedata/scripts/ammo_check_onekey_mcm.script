@@ -342,10 +342,17 @@ end
 function on_before_key_press(key, bind, dis, flags)
     if not (enabled and ui_mcm) then return end -- check if onekey enabled
 
-    -- we unregistered the magazines handler; replicate its mag-load interrupt (Quit/Inventory/Alt)
-    if mags_handler_suppressed and magazines and magazines.action_in_progress()
-       and (cancel_binds[bind] or key == DIK_keys.DIK_LMENU) then
-        magazines.do_interrupt_magload()
+    -- we unregistered the magazines handler
+    -- delegate its mag-load cancel back so its field-loading rules (keep loading after the inventory closes)
+    -- are honored instead of replicating a stale Quit/Inventory/Alt cancel here
+    if mags_handler_suppressed and magazines and magazines.action_in_progress() then
+        if mag_field_load and mag_field_load.handle_load_cancel_key then
+            if mag_field_load.handle_load_cancel_key(key, bind, flags) then return end
+        elseif magazines.handle_load_cancel_key then
+            if magazines.handle_load_cancel_key(key, bind, flags) then return end
+        elseif cancel_binds[bind] or key == DIK_keys.DIK_LMENU then
+            magazines.do_interrupt_magload()
+        end
     end
 
     if not is_reload_key(key, bind) then return end -- check if proper key pressed

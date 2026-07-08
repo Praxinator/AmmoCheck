@@ -30,6 +30,7 @@ local MSG_DURATION = 2
 function on_game_start()
     RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
     RegisterScriptCallback("on_option_change", on_option_change)
+    RegisterScriptCallback("on_before_key_press", on_before_key_press)
     RegisterScriptCallback("on_key_press", on_key_press)
     RegisterScriptCallback("on_key_hold", on_key_hold)
     RegisterScriptCallback("on_key_release", on_key_release)
@@ -732,6 +733,20 @@ function fm_do_single_action()
         do_fm_action(mcm_tap_action, db.actor and db.actor:active_item())
     end
     return true
+end
+
+-- If our key is ALSO bound to the engine fire-mode action, a single press fires both the engine
+-- switch and ours, double-~~switching~~fucking the mode
+--
+-- Cancel the engine action for that press so only our handler runs
+function on_before_key_press(key, bind, dis, flags)
+    if not (enabled and ui_mcm) then return end
+    if mcm_key == DIK_keys.DIK_ESCAPE then return end  -- unbound (set to none)
+    if key ~= mcm_key then return end
+    bind = bind or dik_to_bind(key)
+    if bind == key_bindings.kWPN_FIREMODE_NEXT or bind == key_bindings.kWPN_FIREMODE_PREV then
+        if flags then flags.ret_value = false end
+    end
 end
 
 function on_key_press(key)

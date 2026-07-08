@@ -155,7 +155,6 @@ local numpad_states = {
 }
 
 -- caches
-local ammo_type_cache = {}      -- cache for ammo type classification
 local translation_cache = {}    -- cache for translation strings
 local ammo_list_cache = {}      -- cache for vanilla weapon ammo lists
 
@@ -1038,106 +1037,19 @@ local function reset_maghud_overlay()
     end
 end
 
--- ammo type classification
--- returns: type_key, display_tag
--- Exact-section overrides, matched by PREFIX (so _bad/_verybad degraded variants inherit),
--- checked before the generic patterns. Needed where a section name lies about the round:
--- the 9x19 "pbp" is the JHP +P hollow point (weapon_ammo.ltx comment "JHP +P"), unlike the
--- 9x18 PBP which is a real armor-piercing round, so the generic "_pbp" rule mislabels it.
--- lang independent fix
-local AMMO_TYPE_OVERRIDES = {
-    { prefix = "ammo_9x19_pbp", type = "hp", tag = "(HP)" },
-    -- treat ammo_9x39_pab9 (SP-5) as FMJ
-    { prefix = "ammo_9x39_pab9", type = "fmj", tag = "(FMJ)" },
+-- ammo type to display tag
+-- type classification is now delegated to the shared priler_ammo_classifier library
+local TYPE_TAG = {
+    ap       = "(AP)",
+    hp       = "(HP)",
+    fmj      = "(FMJ)",
+    tracer   = "(T)",
+    fire     = "(I)",
+    sub      = "(SUB)",
+    enhanced = "(+)",
+    slug     = "(SL)",
+    buck     = "(BK)",
 }
-
-local function classify_ammo_type(section)
-    if not section then return "unknown", nil end
-
-    -- check cache first
-    local cached = ammo_type_cache[section]
-    if cached then
-        return cached.type, cached.tag
-    end
-
-    local sec_lower = string_lower(section)
-    local result_type = "unknown"
-    local result_tag = nil
-
-    for i = 1, #AMMO_TYPE_OVERRIDES do
-        local ov = AMMO_TYPE_OVERRIDES[i]
-        if string_find(sec_lower, ov.prefix, 1, true) == 1 then
-            ammo_type_cache[section] = { type = ov.type, tag = ov.tag }
-            return ov.type, ov.tag
-        end
-    end
-
-    -- AP (Armor Piercing): ap, pp, pbp, bp, 7h14, 7n, sp10, ss190, dart, barrikada
-    if string_find(sec_lower, "_ap")
-       or string_find(sec_lower, "_bp") 
-       or string_find(sec_lower, "_pbp")
-       or string_find(sec_lower, "_pp")
-       or string_find(sec_lower, "7h14")
-       or string_find(sec_lower, "7n")
-       or string_find(sec_lower, "sp10")
-       or string_find(sec_lower, "ss190")
-       or string_find(sec_lower, "_dart")
-       or string_find(sec_lower, "barrikada") then
-        result_type, result_tag = "ap", "(AP)"
-    
-    -- HP (Hollow Point): hp, jhp, hydro, sp (soft point)
-    elseif string_find(sec_lower, "_hp") 
-       or string_find(sec_lower, "jhp")
-       or string_find(sec_lower, "hydro")
-       or string_find(sec_lower, "_sp_") then
-        result_type, result_tag = "hp", "(HP)"
-    
-    -- tracer
-    elseif string_find(sec_lower, "_t_") 
-       or string_find(sec_lower, "_tracer") then
-        result_type, result_tag = "tracer", "(T)"
-    
-    -- incendiary/fire: fire, zp
-    elseif string_find(sec_lower, "fire") 
-       or string_find(sec_lower, "_zp") then
-        result_type, result_tag = "fire", "(I)"
-    
-    -- subsonic
-    elseif string_find(sec_lower, "sub") then
-        result_type, result_tag = "sub", "(SUB)"
-    
-    -- match/enhanced: ep, pmm, pab9, 7h1
-    elseif string_find(sec_lower, "_ep")
-       or string_find(sec_lower, "_pmm")
-       or string_find(sec_lower, "pab9")
-       or string_find(sec_lower, "7h1") then
-        result_type, result_tag = "enhanced", "(+)"
-    
-    -- slug (shotgun): slug, zhekan, shrapnel, eco
-    elseif string_find(sec_lower, "slug")
-       or string_find(sec_lower, "zhekan") 
-       or string_find(sec_lower, "shrapnel")
-       or string_find(sec_lower, "_eco") then
-        result_type, result_tag = "slug", "(SL)"
-    
-    -- buckshot: buck, shot (but not shrapnel which is slug)
-    elseif string_find(sec_lower, "buck") 
-       or (string_find(sec_lower, "_shot") and not string_find(sec_lower, "shrapnel")) then
-        result_type, result_tag = "buck", "(BK)"
-    
-    -- FMJ/ball/standard: fmj, ball, ps, p, ss195
-    elseif string_find(sec_lower, "_fmj") 
-       or string_find(sec_lower, "_ball")
-       or string_find(sec_lower, "_ps")
-       or string_match(sec_lower, "_p$")
-       or string_find(sec_lower, "ss195") then
-        result_type, result_tag = "fmj", "(FMJ)"
-    end
-    
-    -- store in cache
-    ammo_type_cache[section] = { type = result_type, tag = result_tag }
-    return result_type, result_tag
-end
 
 -- get color for ammo type
 local function get_ammo_type_color(ammo_type)
@@ -1178,76 +1090,6 @@ local function remove_duplicate_suffix(ammo_name, tag)
     return ammo_name
 end
 
--- classify ammo type based on display name
--- returns: type_key, display_tag
-local function classify_ammo_by_name(ammo_name)
-    if not ammo_name or ammo_name == "" then return "unknown", nil end
-    
-    local name_lower = string_lower(ammo_name)
-    
-    -- HP variants (LRN / LRNPC lead round-nose tagged HP)
-    if string_match(name_lower, " hp$") or string_match(name_lower, "hp$")
-       or string_find(name_lower, "jhp") or string_find(name_lower, "hydro")
-       or string_find(name_lower, "lrn") then
-        return "hp", "(HP)"
-    end
-    
-    -- AP variants
-    if string_match(name_lower, " ap$") or string_match(name_lower, "ap$")
-       or string_match(name_lower, " bp$") or string_match(name_lower, "bp$")
-       or string_match(name_lower, " pbp$") or string_find(name_lower, " pp")
-       or string_find(name_lower, "sp10") or string_find(name_lower, "ss190") then
-        return "ap", "(AP)"
-    end
-    
-    -- 7N series (Russian AP designations - check separately)
-    if string_find(name_lower, "7n") then
-        return "ap", "(AP)"
-    end
-    
-    -- tracer
-    if string_find(name_lower, "tracer") or string_match(name_lower, " t$") then
-        return "tracer", "(T)"
-    end
-    
-    -- Incendiary
-    if string_find(name_lower, "fire") or string_find(name_lower, "incend")
-       or string_find(name_lower, " zp") then
-        return "fire", "(I)"
-    end
-    
-    -- subsonic
-    if string_find(name_lower, "sub") then
-        return "sub", "(SUB)"
-    end
-    
-    -- Enhanced
-    if string_match(name_lower, " ep$") or string_find(name_lower, "pmm")
-       or string_find(name_lower, "match") then
-        return "enhanced", "(+)"
-    end
-    
-    -- Slug
-    if string_find(name_lower, "slug") or string_find(name_lower, "zhekan")
-       or string_find(name_lower, "shrapnel") or string_find(name_lower, "eco") then
-        return "slug", "(SL)"
-    end
-    
-    -- Buckshot
-    if string_find(name_lower, "buck") or string_find(name_lower, "shot") then
-        return "buck", "(BK)"
-    end
-    
-    -- FMJ/Standard (PST ball tagged FMJ; exclude PSTM so the modernized round isn't swept in)
-    if string_find(name_lower, "fmj") or string_find(name_lower, "ball")
-       or string_match(name_lower, " ps$") or string_match(name_lower, " p$")
-       or (string_find(name_lower, "pst") and not string_find(name_lower, "pstm")) then
-        return "fmj", "(FMJ)"
-    end
-    
-    return "unknown", nil
-end
-
 -- ArtiGrok Ballistics (optional) marks its enhanced ammo variants with a trailing "<TYPE>+" on the
 -- SHORT name (".45 HP+", ".300 AP+", ".300 FMJ+"), where the '+' is the signature. The FULL name is the
 -- descriptive one - either ".45 ACP 'Reaper' rounds (HP+)" (with a parenthetical) or ".300 Blackout MAI
@@ -1275,7 +1117,8 @@ local function parse_enhanced_ammo(full_name, short_name)
     return name, tag, type_key
 end
 
--- classify a round, preferring the ArtiGrok enhanced naming, then the short name, then the section.
+-- classify a round: keep the ArtiGrok "+"-enhanced naming (presentation tag/name), otherwise
+-- delegate the type to the shared priler_ammo_classifier and map the key to a display tag
 -- returns: type_key, tag (e.g. "(AP)"), display_name
 local function classify_round(round_sec)
     if not round_sec then return nil, nil, nil end
@@ -1283,10 +1126,8 @@ local function classify_round(round_sec)
     if name == "" then name = nil end
     local enh_name, enh_tag, enh_type = parse_enhanced_ammo(gc(ui_item.get_sec_name(round_sec)), name)
     if enh_tag then return enh_type, enh_tag, enh_name end
-    local atype, tag
-    if name then atype, tag = classify_ammo_by_name(name) end
-    if not tag then atype, tag = classify_ammo_type(round_sec) end
-    return atype, tag, name
+    local atype = priler_ammo_classifier.classify(round_sec)
+    return atype, TYPE_TAG[atype], name
 end
 
 -- format ammo type string for display
@@ -1449,8 +1290,6 @@ local function format_chamber_string(chamber_round)
     if not chamber_round then return nil end
     local cn = gc(ui_item.get_sec_short_name(chamber_round))
     if not cn or cn == "" then return nil end
-    -- local _, ctag = classify_ammo_by_name(cn)
-    -- if ctag then return cn .. " " .. ctag end
     return cn
 end
 
@@ -2785,7 +2624,6 @@ end
 
 function on_option_change()
     -- clear caches when settings change
-    ammo_type_cache = {}
     translation_cache = {}
     
     if ui_mcm then

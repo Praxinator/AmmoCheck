@@ -85,13 +85,12 @@ local function classify_section(section)
        or string_find(s, "7h1") then
         rtype, rtag = "enhanced", "(+)"
 
-    -- slug (shotgun): slug, zhekan, shrapnel, eco
-    elseif string_find(s, "slug") or string_find(s, "zhekan") or string_find(s, "shrapnel")
-       or string_find(s, "_eco") then
+    -- slug (shotgun): slug, zhekan, eco
+    elseif string_find(s, "slug") or string_find(s, "zhekan") or string_find(s, "_eco") then
         rtype, rtag = "slug", "(SL)"
 
-    -- buckshot: buck, shot (but shrapnel is slug, handled above)
-    elseif string_find(s, "buck") or (string_find(s, "_shot") and not string_find(s, "shrapnel")) then
+    -- buckshot: buck, shot
+    elseif string_find(s, "buck") or string_find(s, "_shot") or string_find(s, "shrapnel") then
         rtype, rtag = "buck", "(BK)"
 
     -- FMJ/ball/standard: fmj, ball, ps, p, ss195, pkm belt
@@ -132,11 +131,12 @@ local function classify_name(name)
     if string_match(n, " ep$") or string_find(n, "pmm") or string_find(n, "match") then
         return "enhanced", "(+)"
     end
-    if string_find(n, "slug") or string_find(n, "zhekan") or string_find(n, "shrapnel")
-       or string_find(n, "eco") then
+    if string_find(n, "slug") or string_find(n, "zhekan") or string_find(n, "eco") then
         return "slug", "(SL)"
     end
-    if string_find(n, "buck") or string_find(n, "shot") then return "buck", "(BK)" end
+    if string_find(n, "buck") or string_find(n, "shot") or string_find(n, "shrapnel") then
+        return "buck", "(BK)"
+    end
     if string_find(n, "fmj") or string_find(n, "ball") or string_match(n, " ps$")
        or string_match(n, " p$") or (string_find(n, "pst") and not string_find(n, "pstm")) then
         return "fmj", "(FMJ)"

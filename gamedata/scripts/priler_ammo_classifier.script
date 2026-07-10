@@ -57,13 +57,12 @@ local function classify_section(section)
         end
     end
 
-    -- AP: ap, pp, pbp, bp, 7h14, 7n, sp10, ss190, dart, barrikada, plus high-pen
+    -- AP: ap, pp, pbp, bp, 7h14, sp10, ss190, dart, barrikada, plus high-pen
     -- single-variant calibers (12x76 bull, .300 WM, .50 BMG, .338)
     if string_find(s, "_ap") or string_find(s, "_bp") or string_find(s, "_pbp")
-       or string_find(s, "_pp") or string_find(s, "7h14") or string_find(s, "7n")
-       or string_find(s, "sp10") or string_find(s, "ss190") or string_find(s, "_dart")
-       or string_find(s, "barrikada") or string_find(s, "_bull")
-       or string_find(s, "magnum_300") or string_find(s, "50_bmg")
+       or string_find(s, "_pp") or string_find(s, "7h14") or string_find(s, "sp10")
+       or string_find(s, "ss190") or string_find(s, "_dart") or string_find(s, "barrikada")
+       or string_find(s, "_bull") or string_find(s, "magnum_300") or string_find(s, "50_bmg")
        or string_find(s, "338") then
         rtype, rtag = "ap", "(AP)"
 
@@ -95,7 +94,8 @@ local function classify_section(section)
 
     -- FMJ/ball/standard: fmj, ball, ps, p, ss195, pkm belt
     elseif string_find(s, "_fmj") or string_find(s, "_ball") or string_find(s, "_ps")
-       or string_match(s, "_p$") or string_find(s, "ss195") or string_find(s, "pkm") then
+       or string_match(s, "_p$") or string_find(s, "ss195") or string_find(s, "pkm")
+       or string_match(s, "_7h1$") then
         rtype, rtag = "fmj", "(FMJ)"
     end
 
@@ -119,10 +119,9 @@ local function classify_name(name)
     -- mis-tag the round as slug
     if string_match(n, "%f[%a]ap%f[%A]") or string_match(n, " ap$") or string_match(n, "ap$")
        or string_match(n, " bp$") or string_match(n, "bp$") or string_match(n, " pbp$")
-       or string_find(n, " pp") or string_find(n, "sp10") or string_find(n, "ss190") then
+       or string_find(n, "7n14") or string_find(n, "sp10") or string_find(n, "ss190") then
         return "ap", "(AP)"
     end
-    if string_find(n, "7n") then return "ap", "(AP)" end
     if string_find(n, "tracer") or string_match(n, " t$") then return "tracer", "(T)" end
     if string_find(n, "fire") or string_find(n, "incend") or string_find(n, " zp") then
         return "fire", "(I)"
@@ -138,7 +137,8 @@ local function classify_name(name)
         return "buck", "(BK)"
     end
     if string_find(n, "fmj") or string_find(n, "ball") or string_match(n, " ps$")
-       or string_match(n, " p$") or (string_find(n, "pst") and not string_find(n, "pstm")) then
+       or string_match(n, " p$") or string_find(n, " pp") or string_find(n, "7n1") 
+       or (string_find(n, "pst") and not string_find(n, "pstm")) then
         return "fmj", "(FMJ)"
     end
     return "unknown", nil

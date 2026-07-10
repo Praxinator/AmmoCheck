@@ -67,9 +67,9 @@ local function classify_section(section)
        or string_find(s, "338") then
         rtype, rtag = "ap", "(AP)"
 
-    -- HP: hp, jhp, hydro, soft point
+    -- HP: hp, jhp, hydro, soft point, 338 federal
     elseif string_find(s, "_hp") or string_find(s, "jhp") or string_find(s, "hydro")
-       or string_find(s, "_sp_") then
+       or string_find(s, "_sp_") or string_find(s, "federal") then
         rtype, rtag = "hp", "(HP)"
 
     elseif string_find(s, "_t_") or string_find(s, "_tracer") then
